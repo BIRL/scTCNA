@@ -72,13 +72,6 @@ def find_3ca_dir(study_dir: str | Path) -> Path:
     raise FileNotFoundError(f"no 3CA bundle (Cells.csv + Genes.txt) found under {study_dir}")
 
 
-def _3ca_matrix_path(bundle: Path) -> Path:
-    for name in ("Exp_data_UMIcounts.mtx", "Exp_data_TPM.mtx"):
-        if (bundle / name).exists():
-            return bundle / name
-    raise FileNotFoundError(f"no Exp_data_*.mtx in {bundle}")
-
-
 def read_3ca_cells(bundle: str | Path) -> pd.DataFrame:
     """Read Cells.csv (+ Samples.csv) and derive ``patient`` and ``compartment``.
 
@@ -106,53 +99,103 @@ def read_3ca_cells(bundle: str | Path) -> pd.DataFrame:
 
 def read_mtx_header(path: str | Path) -> tuple[int, int, int, bool, int]:
     """Return (n_rows, n_cols, nnz, is_integer, n_header_lines) of a coordinate MatrixMarket file."""
+    with open(path) as fh:
+        nrow, ncol, nnz, is_integer, n_header = _read_mtx_header_stream(fh)
+    return nrow, ncol, nnz, is_integer, n_header
+
+
+def _read_mtx_header_stream(fh) -> tuple[int, int, int, bool, int]:
+    """Consume the banner/comment lines and the dimension line from an open text stream."""
     n_header = 0
     is_integer = False
-    with open(path) as fh:
-        for line in fh:
-            n_header += 1
-            if line.startswith("%"):
-                if n_header == 1:
-                    is_integer = "integer" in line
-                continue
-            nrow, ncol, nnz = (int(x) for x in line.split())
-            return nrow, ncol, nnz, is_integer, n_header
-    raise ValueError(f"{path}: no dimension line found")
+    for line in fh:
+        n_header += 1
+        if line.startswith("%"):
+            if n_header == 1:
+                is_integer = "integer" in line
+            continue
+        nrow, ncol, nnz = (int(x) for x in line.split())
+        return nrow, ncol, nnz, is_integer, n_header
+    raise ValueError("MatrixMarket stream: no dimension line found")
 
 
-def read_mtx_cells_subset(path: str | Path, keep_cells: np.ndarray, chunksize: int = 20_000_000) -> sp.csr_matrix:
+def open_3ca_matrix(bundle: Path, archive: Path | None = None):
+    """Yield (text stream, matrix name) for the 3CA expression matrix.
+
+    Reads ``Exp_data_UMIcounts.mtx`` (or the TPM variant) from the extracted
+    bundle when present, otherwise streams it straight out of the study's
+    ``Data_*.tar.gz`` archive so the multi-gigabyte text matrix never has to be
+    written to disk.
+    """
+    import contextlib
+    import io as _io
+    import tarfile
+
+    @contextlib.contextmanager
+    def _from_file(path: Path):
+        with open(path) as fh:
+            yield fh, path.name
+
+    @contextlib.contextmanager
+    def _from_archive(arc: Path):
+        with tarfile.open(arc, "r:gz") as tf:
+            member = None
+            for m in tf.getmembers():
+                base = Path(m.name).name
+                if base in ("Exp_data_UMIcounts.mtx", "Exp_data_TPM.mtx") and (member is None or base.startswith("Exp_data_UMI")):
+                    member = m
+            if member is None:
+                raise FileNotFoundError(f"no Exp_data_*.mtx inside {arc}")
+            raw = tf.extractfile(member)
+            yield _io.TextIOWrapper(raw, encoding="ascii"), Path(member.name).name
+
+    for name in ("Exp_data_UMIcounts.mtx", "Exp_data_TPM.mtx"):
+        if (bundle / name).exists():
+            return _from_file(bundle / name)
+    if archive is not None and archive.exists():
+        return _from_archive(archive)
+    raise FileNotFoundError(f"no Exp_data_*.mtx in {bundle} and no archive to stream from")
+
+
+def read_mtx_cells_subset(source, keep_cells: np.ndarray, chunksize: int = 20_000_000) -> sp.csr_matrix:
     """Stream a genes x cells coordinate MatrixMarket file, keeping only ``keep_cells``.
 
-    Returns a cells x genes CSR matrix (rows ordered as the kept cells appear in
-    the file's column order). Streaming keeps memory proportional to the kept
-    entries rather than the whole file.
+    ``source`` is a path or an open text stream positioned at the start of the
+    file. Returns a cells x genes CSR matrix (rows ordered as the kept cells
+    appear in the file's column order). Streaming keeps memory proportional to
+    the kept entries rather than the whole file.
     """
-    n_genes, n_cells, _nnz, is_integer, n_header = read_mtx_header(path)
-    keep_cells = np.asarray(keep_cells, dtype=bool)
-    if keep_cells.shape[0] != n_cells:
-        raise ValueError(f"keep_cells has {keep_cells.shape[0]} entries but matrix has {n_cells} cells")
-    new_index = np.cumsum(keep_cells) - 1
-    n_keep = int(keep_cells.sum())
-    val_dtype = np.int32 if is_integer else np.float32
-    rows, cols, vals = [], [], []
-    reader = pd.read_csv(
-        path,
-        sep=r"\s+",
-        header=None,
-        names=["g", "c", "v"],
-        skiprows=n_header,
-        dtype={"g": np.int32, "c": np.int32, "v": val_dtype},
-        chunksize=chunksize,
-        engine="c",
-    )
-    for chunk in reader:
-        c = chunk["c"].to_numpy() - 1
-        m = keep_cells[c]
-        if not m.any():
-            continue
-        rows.append(new_index[c[m]])
-        cols.append(chunk["g"].to_numpy()[m] - 1)
-        vals.append(chunk["v"].to_numpy()[m])
+    own = isinstance(source, (str, Path))
+    fh = open(source) if own else source
+    try:
+        n_genes, n_cells, _nnz, is_integer, _ = _read_mtx_header_stream(fh)
+        keep_cells = np.asarray(keep_cells, dtype=bool)
+        if keep_cells.shape[0] != n_cells:
+            raise ValueError(f"keep_cells has {keep_cells.shape[0]} entries but matrix has {n_cells} cells")
+        new_index = np.cumsum(keep_cells) - 1
+        n_keep = int(keep_cells.sum())
+        val_dtype = np.int32 if is_integer else np.float32
+        rows, cols, vals = [], [], []
+        reader = pd.read_csv(
+            fh,
+            sep=r"\s+",
+            header=None,
+            names=["g", "c", "v"],
+            dtype={"g": np.int32, "c": np.int32, "v": val_dtype},
+            chunksize=chunksize,
+            engine="c",
+        )
+        for chunk in reader:
+            c = chunk["c"].to_numpy() - 1
+            m = keep_cells[c]
+            if not m.any():
+                continue
+            rows.append(new_index[c[m]])
+            cols.append(chunk["g"].to_numpy()[m] - 1)
+            vals.append(chunk["v"].to_numpy()[m])
+    finally:
+        if own:
+            fh.close()
     if rows:
         r = np.concatenate(rows)
         cidx = np.concatenate(cols)
@@ -174,26 +217,33 @@ def load_3ca(
     max_cells_per_group: int | None = None,
     seed: int = 0,
     drop_unassigned: bool = True,
+    archive: str | Path | None = None,
 ) -> ad.AnnData:
-    """Load a 3CA study bundle into AnnData (raw UMI counts)."""
+    """Load a 3CA study bundle into AnnData (raw UMI counts).
+
+    The expression matrix is read from the extracted ``Exp_data_*.mtx`` when it
+    exists, otherwise streamed from ``archive`` (the study's Data_*.tar.gz).
+    """
     bundle = find_3ca_dir(study_dir)
     cells = read_3ca_cells(bundle)
     genes = [g.strip().strip('"') for g in open(bundle / "Genes.txt") if g.strip()]
-    mtx = _3ca_matrix_path(bundle)
-    n_genes, n_cells, *_ = read_mtx_header(mtx)
-    if n_cells != len(cells) or n_genes != len(genes):
-        raise ValueError(f"{mtx}: matrix is {n_genes}x{n_cells} but Genes.txt/Cells.csv have {len(genes)}/{len(cells)} entries")
     keep = np.ones(len(cells), dtype=bool)
     if drop_unassigned:
         keep &= (cells["compartment"] != UNASSIGNED).to_numpy()
     keep &= select_cells(cells, max_cells_per_group, seed)
-    log.info("%s: keeping %d of %d cells (%s)", dataset_id, keep.sum(), len(cells), mtx.name)
-    X = read_mtx_cells_subset(mtx, keep)
-    if mtx.name == "Exp_data_TPM.mtx":
+    if archive is None:
+        candidates = sorted(Path(study_dir).glob("Data_*.tar.gz"))
+        archive = candidates[0] if candidates else None
+    with open_3ca_matrix(bundle, Path(archive) if archive else None) as (stream, matrix_name):
+        log.info("%s: keeping %d of %d cells (%s)", dataset_id, keep.sum(), len(cells), matrix_name)
+        X = read_mtx_cells_subset(stream, keep)
+    if X.shape[1] != len(genes):
+        raise ValueError(f"{dataset_id}: matrix has {X.shape[1]} genes but Genes.txt lists {len(genes)}")
+    if matrix_name == "Exp_data_TPM.mtx":
         log.warning("%s: 3CA bundle provides TPM (non-UMI technology); counts-based steps are approximate", dataset_id)
     obs = cells.loc[keep].reset_index(drop=True)
     adata = _finalise(X, obs, genes, dataset_id, cancer_type)
-    adata.uns["source"] = {"atlas": "3CA", "bundle": str(bundle), "matrix": mtx.name, "values": "UMI" if "UMI" in mtx.name else "TPM"}
+    adata.uns["source"] = {"atlas": "3CA", "bundle": str(bundle), "matrix": matrix_name, "values": "UMI" if "UMI" in matrix_name else "TPM"}
     return adata
 
 

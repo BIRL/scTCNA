@@ -4,9 +4,10 @@
 3CA bundles (Dropbox) and TISCH2 files (tisch.compbio.cn) are fetched into
 ``data/raw/<source>/<dataset_id>/``. Each download is recorded in
 ``data/raw/manifest.json`` with URL, size, SHA-256 and UTC download date.
-With ``--convert`` the raw bundle is turned into ``<dataset_id>.h5ad`` (raw
-UMI counts, curated cell annotations) and the large text matrix is deleted to
-save disk space; the pipeline reads the .h5ad when present.
+With ``--convert`` the bundle is turned into ``<dataset_id>.h5ad`` (raw UMI
+counts, curated cell annotations). The multi-gigabyte expression matrix is
+streamed straight out of the .tar.gz (never extracted) and the archive is
+deleted afterwards unless ``--keep-archives``; the pipeline reads the .h5ad.
 
 Usage:
     python scripts/download_data.py --list
@@ -87,8 +88,10 @@ def fetch_3ca(entry: dict, ds_dir: Path, keep_archives: bool) -> dict:
             download(url, arc)
         rec["files"][key] = {"url": url, "file": name, "bytes": arc.stat().st_size, "sha256": sha256_of(arc)}
         with tarfile.open(arc) as tf:
-            tf.extractall(ds_dir, filter="data")
-        if not keep_archives and key == "data":
+            # the expression matrix (gigabytes of text) stays inside the archive and is streamed at conversion time
+            members = [m for m in tf.getmembers() if not Path(m.name).name.startswith("Exp_data_")]
+            tf.extractall(ds_dir, members=members, filter="data")
+        if not keep_archives and key == "meta":
             arc.unlink()
     # 3CA ships the curated cell table in both bundles; prefer the Meta-data copy when present
     meta_dirs = [p for p in ds_dir.iterdir() if p.is_dir() and p.name.startswith("Meta-data")]
@@ -123,7 +126,7 @@ def convert(entry: dict, ds_dir: Path, p: dict, delete_raw: bool) -> Path:
     cap = p["sampling"]["max_cells_per_patient_compartment"]
     seed = p["sampling"]["seed"]
     if entry["source"] == "3CA":
-        adata = load_3ca(ds_dir, entry["id"], entry["cancer_type"], cap, seed)
+        adata = load_3ca(ds_dir, entry["id"], entry["cancer_type"], cap, seed, archive=ds_dir / entry["archive"])
     else:
         h5 = ds_dir / Path(entry["data_url"].split("?")[0]).name
         meta = ds_dir / Path(entry["meta_url"].split("?")[0]).name
@@ -131,9 +134,9 @@ def convert(entry: dict, ds_dir: Path, p: dict, delete_raw: bool) -> Path:
     adata.write_h5ad(out, compression="gzip")
     log.info("%s: wrote %s (%d cells x %d genes)", entry["id"], out.name, adata.n_obs, adata.n_vars)
     if delete_raw:
-        for mtx in ds_dir.rglob("Exp_data_*.mtx"):
-            mtx.unlink()
-            log.info("%s: deleted %s to free disk space", entry["id"], mtx.name)
+        for big in [*ds_dir.rglob("Exp_data_*.mtx"), *ds_dir.glob("Data_*.tar.gz")]:
+            big.unlink()
+            log.info("%s: deleted %s to free disk space", entry["id"], big.name)
     return out
 
 
@@ -145,8 +148,8 @@ def main(argv=None) -> int:
     ap.add_argument("--all", action="store_true", help="fetch every enabled dataset")
     ap.add_argument("--list", action="store_true", help="print the registry and exit")
     ap.add_argument("--convert", action="store_true", help="convert to .h5ad after download")
-    ap.add_argument("--keep-archives", action="store_true", help="keep .tar.gz archives after extraction")
-    ap.add_argument("--keep-raw", action="store_true", help="keep the extracted .mtx after conversion")
+    ap.add_argument("--keep-archives", action="store_true", help="keep .tar.gz archives after conversion")
+    ap.add_argument("--keep-raw", action="store_true", help="alias of --keep-archives")
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
@@ -175,7 +178,7 @@ def main(argv=None) -> int:
             manifest[entry["id"]] = rec
             save_manifest(raw_dir, manifest)
             if args.convert:
-                convert(entry, ds_dir, params(cfg), delete_raw=not args.keep_raw)
+                convert(entry, ds_dir, params(cfg), delete_raw=not (args.keep_raw or args.keep_archives))
         except Exception:
             log.exception("%s: failed", entry["id"])
             failures += 1
