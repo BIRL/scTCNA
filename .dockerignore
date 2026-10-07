@@ -1,0 +1,43 @@
+# Keep the build context to what the Dockerfile copies: sctcna/, app/, configs/,
+# data/app/, pyproject.toml and requirements-app.txt.
+.git
+.gitignore
+.gitattributes
+.github
+.venv
+venv
+
+# Data that is not served by the app (raw downloads, per-dataset outputs,
+# synthetic tables). data/app is intentionally NOT ignored.
+data/raw
+data/interim
+data/processed
+data/processed*
+data/app_syn
+*.h5ad
+*.h5
+*.mtx
+*.tar.gz
+
+# Tests, docs and tooling
+tests
+docs/*.docx
+node_modules
+test-results
+playwright-report
+Makefile
+scripts
+docker-compose*.yml
+
+# Caches and editor files
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+*.egg-info
+build
+dist
+.DS_Store
+.idea
+.vscode
