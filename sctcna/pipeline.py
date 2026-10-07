@@ -99,6 +99,8 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     doublet_stats = {"doublets_removed": 0, "scrublet_skipped_samples": [], "scrublet_failed_samples": []}
     if qc.get("run_scrublet", True):
         adata, doublet_stats = run_scrublet(adata, "sample", qc["scrublet_min_cells_per_sample"], params["sampling"]["seed"])
+    else:
+        adata.obs["doublet_score"] = np.nan
     # drop patient x compartment groups that are too small after QC
     sizes = adata.obs.groupby(["patient", "compartment"], observed=True)["cell_name"].transform("size")
     adata = adata[(sizes >= grp["min_cells_per_group"]).to_numpy()].copy()
@@ -196,11 +198,16 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
 
     # 6. gene summary + paired tests -----------------------------------------------------
     medians = compartment_medians(per_patient)
-    tests_cv = paired_noise_tests(per_patient, "cv", grp["min_patients_per_test"])
-    tests_mad = paired_noise_tests(per_patient, "mad", grp["min_patients_per_test"])[["dataset", "gene", "log2fc_mad_median", "p_value", "q_value"]].rename(
+    # Genes enter the paired tests (and hence the BH family) only when detected in >= min_detection_rate of
+    # cells in both compartments (median across patients); noise of sporadically detected genes is unreliable.
+    det_cols = [c for c in (f"detection_rate_{MALIGNANT}", f"detection_rate_{NON_MALIGNANT}") if c in medians]
+    medians["expressed"] = (medians[det_cols] >= met_p["min_detection_rate"]).all(axis=1) if len(det_cols) == 2 else False
+    tested = per_patient[per_patient["gene"].isin(set(medians.loc[medians["expressed"], "gene"]))]
+    tests_cv = paired_noise_tests(tested, "cv", grp["min_patients_per_test"])
+    tests_mad = paired_noise_tests(tested, "mad", grp["min_patients_per_test"])[["dataset", "gene", "log2fc_mad_median", "p_value", "q_value"]].rename(
         columns={"p_value": "p_value_mad", "q_value": "q_value_mad"}
     )
-    tests_fano = paired_noise_tests(per_patient, "fano", grp["min_patients_per_test"])[["dataset", "gene", "log2fc_fano_median", "p_value", "q_value"]].rename(
+    tests_fano = paired_noise_tests(tested, "fano", grp["min_patients_per_test"])[["dataset", "gene", "log2fc_fano_median", "p_value", "q_value"]].rename(
         columns={"p_value": "p_value_fano", "q_value": "q_value_fano"}
     )
     gene_summary = (
@@ -211,8 +218,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     gene_summary["log2fc_cv_of_medians"] = log2_fold_change(gene_summary.get(f"cv_{MALIGNANT}"), gene_summary.get(f"cv_{NON_MALIGNANT}"))
     if f"cv2_resid_{MALIGNANT}" in gene_summary and f"cv2_resid_{NON_MALIGNANT}" in gene_summary:
         gene_summary["delta_cv2_resid"] = gene_summary[f"cv2_resid_{MALIGNANT}"] - gene_summary[f"cv2_resid_{NON_MALIGNANT}"]
-    det_cols = [c for c in (f"detection_rate_{MALIGNANT}", f"detection_rate_{NON_MALIGNANT}") if c in gene_summary]
-    gene_summary["expressed"] = (gene_summary[det_cols] >= met_p["min_detection_rate"]).all(axis=1) if det_cols else False
     # pooled-vs-patient comparison (pseudoreplication diagnostic): CV from pooled cells vs median across patients
     pooled_cv = pooled.pivot_table(index="gene", columns="compartment", values="cv", aggfunc="first", observed=True)
     pooled_cv.columns = [f"cv_pooled_{c}" for c in pooled_cv.columns]
