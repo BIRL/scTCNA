@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Data (raw downloads are large; processed outputs are reproducible)
+data/raw/
+data/interim/
+data/processed/
+!data/app/
+*.h5ad
+*.mtx
+*.tar.gz
+*.h5
+
+# Tests / tooling
+test-results/
+playwright-report/
+node_modules/
+.DS_Store
