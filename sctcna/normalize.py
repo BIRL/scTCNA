@@ -26,3 +26,19 @@ def log2p1(X: sp.spmatrix) -> sp.csr_matrix:
     out = sp.csr_matrix(X, dtype=np.float32, copy=True)
     out.data = np.log2(out.data + 1.0).astype(np.float32)
     return out
+
+
+def select_columns(X: sp.spmatrix, mask_or_index) -> sp.csr_matrix:
+    """Column subset of a sparse matrix returned as canonical CSR.
+
+    Goes through CSC so that the subset is a plain row selection on the
+    transposed structure, which avoids the CSR fancy-column-indexing kernel
+    (observed to crash on large matrices with some SciPy/NumPy builds).
+    """
+    idx = np.flatnonzero(mask_or_index) if np.asarray(mask_or_index).dtype == bool else np.asarray(mask_or_index, dtype=np.int64)
+    Xc = sp.csc_matrix(X)
+    Xc.sum_duplicates()
+    out = sp.csr_matrix(Xc[:, idx])
+    out.sum_duplicates()
+    out.sort_indices()
+    return out

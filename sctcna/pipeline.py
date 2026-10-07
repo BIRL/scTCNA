@@ -31,7 +31,7 @@ from . import __version__
 from .depth import depth2_matrix, depth2_per_cell, depth_matrix, depth_per_cell, gene_mean_sd, pseudobulk_log_cpm
 from .io import MALIGNANT, NON_MALIGNANT
 from .metrics import gene_noise_table, log2_fold_change, mean_trend_residual
-from .normalize import log2p1, normalize_cp10k
+from .normalize import log2p1, normalize_cp10k, select_columns
 from .qc import add_qc_metrics, common_depth_target, downsample_counts, filter_cells, filter_genes, run_scrublet
 from .stats import compartment_medians, paired_noise_tests, paired_score_test
 
@@ -153,7 +153,7 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     logX = log2p1(norm)
     det = np.bincount(sp.csr_matrix(counts).indices, minlength=adata.n_vars) / adata.n_obs
     depth_genes = det >= depth_p["min_detection_rate_genes"]
-    logX_d = sp.csr_matrix(logX[:, depth_genes])
+    logX_d = select_columns(logX, depth_genes)
     is_non_mal = (adata.obs["compartment"] == NON_MALIGNANT).to_numpy()
     mean_all, sd_all = gene_mean_sd(logX_d)
     cell_depth2 = depth2_per_cell(logX_d, mean_all, sd_all)
@@ -167,7 +167,7 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     cell_scores = cell_scores.reset_index(drop=True)
 
     labels = adata.obs["patient"].astype(str) + "|" + adata.obs["compartment"].astype(str)
-    pb, pb_n = pseudobulk_log_cpm(counts[:, depth_genes], labels, min_cells=grp["min_cells_per_group"])
+    pb, pb_n = pseudobulk_log_cpm(select_columns(counts, depth_genes), labels, min_cells=grp["min_cells_per_group"])
     pb_meta = pd.DataFrame({"label": pb.columns})
     pb_meta[["patient", "compartment"]] = pb_meta["label"].str.split("|", expand=True)
     pb_meta["n_cells"] = pb_n.reindex(pb.columns).to_numpy()
@@ -189,7 +189,9 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     sample_scores["dataset"] = meta["id"]
     sample_scores["cancer_type"] = meta["cancer_type"]
     summary["depth"] = {"n_genes_used": int(depth_genes.sum())}
-    for score in ("depth2_pseudobulk", "depth_pseudobulk", "depth2_cell_median", "depth_cell_median"):
+    # DEPTH on pseudo-bulks is only defined for malignant samples (non-malignant pseudo-bulks are the reference),
+    # so a paired test is possible for the other three scores only.
+    for score in ("depth2_pseudobulk", "depth2_cell_median", "depth_cell_median"):
         summary["depth"][f"paired_test_{score}"] = paired_score_test(sample_scores, score, min_patients=3)
 
     # 6. gene summary + paired tests -----------------------------------------------------
