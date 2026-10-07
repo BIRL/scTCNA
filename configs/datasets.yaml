@@ -1,0 +1,226 @@
+# Dataset registry for scTCNA.
+#
+# Primary source: 3CA (Curated Cancer Cell Atlas, Weizmann Institute; Gavish et al.,
+# Nature 2023). 3CA study bundles are hosted on Dropbox; each bundle contains
+# Exp_data_UMIcounts.mtx (genes x cells, raw UMI counts), Genes.txt, Cells.csv and
+# Samples.csv. The matching Meta-data bundle carries the curated cell-type calls
+# ("Malignant" vs annotated non-malignant lineages) and patient identifiers.
+#
+# Secondary source: TISCH2 (Han et al., NAR 2023), new domain tisch.compbio.cn.
+# TISCH2 matrices are log1p(counts-per-10k) rather than raw counts; the loader
+# inverts the per-cell scaling to recover integer UMI counts and verifies integrality.
+#
+# `enabled: true` datasets are the ones used for the published tables.
+# URLs were taken from the 3CA cancer-type pages on 2026-10-08.
+
+sources:
+  3CA:
+    name: Curated Cancer Cell Atlas (3CA)
+    url: https://www.weizmann.ac.il/sites/3CA/
+    citation: "Gavish A, Tyler M, Greenwald AC, et al. Hallmarks of transcriptional intratumour heterogeneity across a thousand tumours. Nature 618, 598-606 (2023)."
+  TISCH2:
+    name: Tumor Immune Single-cell Hub 2 (TISCH2)
+    url: https://tisch.compbio.cn/
+    citation: "Han Y, Wang Y, Dong X, et al. TISCH2: expanded datasets and new tools for single-cell transcriptome analyses of the tumor microenvironment. Nucleic Acids Res 51, D1425-D1431 (2023)."
+
+datasets:
+  - id: BRCA_Wu2021
+    enabled: true
+    source: 3CA
+    cancer_type: BRCA
+    cancer_name: Breast cancer
+    tcna_site: Breast
+    study: Wu et al. 2021
+    citation: "Wu SZ et al. A single-cell and spatially resolved atlas of human breast cancers. Nat Genet 53, 1334-1347 (2021)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/tedg9e7b3x92tyd8kub5l/Data_Wu2021_Breast.tar.gz?rlkey=pftfny91obekk99h1hdad2wyn&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/5kf4vmkru9ehlqvot6unz/Meta-data_Wu2021_Breast.tar.gz?rlkey=smpcvfapk7pcph5tck7xqjvx4&dl=1"
+    archive: Data_Wu2021_Breast.tar.gz
+
+  - id: LUAD_Kim2020
+    enabled: true
+    source: 3CA
+    cancer_type: LUAD
+    cancer_name: Lung adenocarcinoma
+    tcna_site: Lung
+    study: Kim et al. 2020
+    citation: "Kim N et al. Single-cell RNA sequencing demonstrates the molecular and cellular reprogramming of metastatic lung adenocarcinoma. Nat Commun 11, 2285 (2020)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/n3hg4fj9bth2tkroej6t2/Data_Kim2020_Lung.tar.gz?rlkey=fxabtlt57pexdj7hdhvddzyjx&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/0vvy8pugcvfz50cut60gy/Meta-data_Kim2020_Lung.tar.gz?rlkey=hrg78tcmlt7l7py1em19y51g7&dl=1"
+    archive: Data_Kim2020_Lung.tar.gz
+
+  - id: COAD_Lee2020
+    enabled: true
+    source: 3CA
+    cancer_type: COAD
+    cancer_name: Colorectal cancer
+    tcna_site: Colorectal
+    study: Lee et al. 2020
+    citation: "Lee HO et al. Lineage-dependent gene expression programs influence the immune landscape of colorectal cancer. Nat Genet 52, 594-603 (2020)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/6s8wo5wc311g5koz2nyep/Data_Lee2020_Colorectal.tar.gz?rlkey=lqfq6llcul4ghvhhl3ytxzk04&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/go3m1x3j3gtmhmjexbvk6/Meta-data_Lee2020_Colorectal.tar.gz?rlkey=4p2qlwuz3ay3oztnun3b9kgfu&dl=1"
+    archive: Data_Lee2020_Colorectal.tar.gz
+
+  - id: HNSC_Kurten2021
+    enabled: true
+    source: 3CA
+    cancer_type: HNSC
+    cancer_name: Head and neck squamous cell carcinoma
+    tcna_site: Head and Neck
+    study: Kürten et al. 2021
+    citation: "Kürten CHL et al. Investigating immune and non-immune cell interactions in head and neck tumors by single-cell RNA sequencing. Nat Commun 12, 7338 (2021)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/ujuufns613yl72lol9g0z/Data_K-rten2021_Head-and-Neck.tar.gz?rlkey=g434xmk2pti37t0a7ffkitfsd&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/85riem966wrzhvwhgcc2u/Meta-data_K-rten2021_Head-and-Neck.tar.gz?rlkey=a8lti0sofll8ivkikduwm7j2c&dl=1"
+    archive: Data_K-rten2021_Head-and-Neck.tar.gz
+
+  - id: GBM_Wang2019
+    enabled: true
+    source: 3CA
+    cancer_type: GBM
+    cancer_name: Glioblastoma
+    tcna_site: Brain
+    study: Wang et al. 2019
+    citation: "Wang L et al. The phenotypes of proliferating glioblastoma cells reside on a single axis of variation. Cancer Discov 9, 1708-1719 (2019)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/u7y3jo2jc1dlv4qsl1cc8/Data_Wang2019_Brain.tar.gz?rlkey=733ldgm8k5ztzfqbgdewlrynh&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/it3075pqkbco9ocrihmps/Meta-data_Wang2019_Brain.tar.gz?rlkey=pg8kco2i0o5huju9w1ypf45ta&dl=1"
+    archive: Data_Wang2019_Brain.tar.gz
+
+  - id: LIHC_Sun2021
+    enabled: true
+    source: 3CA
+    cancer_type: LIHC
+    cancer_name: Hepatocellular carcinoma
+    tcna_site: Liver
+    study: Sun et al. 2021
+    citation: "Sun Y et al. Single-cell landscape of the ecosystem in early-relapse hepatocellular carcinoma. Cell 184, 404-421 (2021)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/h2zmdzjk2c2ywswzl8688/Data_Sun2021_Liver-Biliary.tar.gz?rlkey=jer8paty8a1lbau2g3o3nk4k3&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/r9p07q9zxq2xrueruqhme/Meta-data_Sun2021_Liver-Biliary.tar.gz?rlkey=i6idaw9yj2cve8addvnyrvcs6&dl=1"
+    archive: Data_Sun2021_Liver-Biliary.tar.gz
+
+  - id: PDAC_Peng2019
+    enabled: true
+    source: 3CA
+    cancer_type: PDAC
+    cancer_name: Pancreatic ductal adenocarcinoma
+    tcna_site: Pancreas
+    study: Peng et al. 2019
+    citation: "Peng J et al. Single-cell RNA-seq highlights intra-tumoral heterogeneity and malignant progression in pancreatic ductal adenocarcinoma. Cell Res 29, 725-738 (2019)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/q0skgmowh7ew27xy6fokj/Data_Peng2019_Pancreas.tar.gz?rlkey=sd8xw1o3zk7n7xz09dz5w6oip&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/gyozponuolhmxrb77wb4w/Meta-data_Peng2019_Pancreas.tar.gz?rlkey=5iy4yaoyt2q684v5w5as4xf0g&dl=1"
+    archive: Data_Peng2019_Pancreas.tar.gz
+
+  - id: SKCM_Biermann2022
+    enabled: true
+    source: 3CA
+    cancer_type: SKCM
+    cancer_name: Melanoma (metastatic)
+    tcna_site: Skin
+    study: Biermann et al. 2022
+    citation: "Biermann J et al. Dissecting the treatment-naive ecosystem of human melanoma brain metastasis. Cell 185, 2591-2608 (2022)."
+    technology: 10x
+    site: metastatic
+    data_url: "https://www.dropbox.com/scl/fi/y0crw564p468wp94ua8he/Data_Biermann2022_Skin.tar.gz?rlkey=xq6n55fyfsjuyqminns00eo28&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/hie2bh542e7rgygkts93j/Meta-data_Biermann2022_Skin.tar.gz?rlkey=pugfopoav4acyosqom7eo2cxl&dl=1"
+    archive: Data_Biermann2022_Skin.tar.gz
+    notes: "All samples are metastases (brain and extracranial). The only 10x melanoma study in 3CA with both malignant and non-malignant cells."
+
+  - id: OV_Zhang2022
+    enabled: true
+    source: 3CA
+    cancer_type: OV
+    cancer_name: High-grade serous ovarian cancer
+    tcna_site: Ovary
+    study: Zhang et al. 2022
+    citation: "Zhang K et al. Longitudinal single-cell RNA-seq analysis reveals stress-promoted chemoresistance in metastatic ovarian cancer. Sci Adv 8, eabm1831 (2022)."
+    technology: 10x
+    site: mixed
+    data_url: "https://www.dropbox.com/scl/fi/o3z53txjhsh8jdxmfd0bt/Data_Zhang2022_Ovarian.tar.gz?rlkey=jd6qix1ntvu0tnasy6nbois5o&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/hvt9avgpv1t7do3ycc3ij/Meta-data_Zhang2022_Ovarian.tar.gz?rlkey=j8xqlgeep5a6tp349gixn70tw&dl=1"
+    archive: Data_Zhang2022_Ovarian.tar.gz
+
+  - id: KIRC_Zhang2021
+    enabled: true
+    source: 3CA
+    cancer_type: KIRC
+    cancer_name: Clear cell renal cell carcinoma
+    tcna_site: Kidney
+    study: Zhang et al. 2021
+    citation: "Zhang Y et al. Single-cell analyses of renal cell cancers reveal insights into tumor microenvironment, cell of origin, and therapy response. Proc Natl Acad Sci USA 118, e2103240118 (2021)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/i1n8v8d0ht2p918su3akp/Data_Zhang2021_Kidney.tar.gz?rlkey=friqzf8p24qeg2cvljfb8xtly&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/p2rtwzhq6uq0oovlsh5k9/Meta-data_Zhang2021_Kidney.tar.gz?rlkey=xcfoysr9z2l5479cm2l4p3s8x&dl=1"
+    archive: Data_Zhang2021_Kidney.tar.gz
+
+  # TISCH2 alternatives (same studies where available). Disabled by default because
+  # TISCH2 distributes log-normalised matrices rather than raw counts.
+  - id: BRCA_GSE176078_TISCH2
+    enabled: false
+    source: TISCH2
+    cancer_type: BRCA
+    cancer_name: Breast cancer
+    tcna_site: Breast
+    study: Wu et al. 2021 (TISCH2 processing)
+    citation: "Wu SZ et al. Nat Genet 53, 1334-1347 (2021); processed by TISCH2."
+    technology: 10x
+    site: primary
+    data_url: "https://tisch.compbio.cn/static/data/BRCA_GSE176078/BRCA_GSE176078_expression.h5"
+    meta_url: "https://tisch.compbio.cn/static/data/BRCA_GSE176078/BRCA_GSE176078_CellMetainfo_table.tsv"
+    archive: BRCA_GSE176078_expression.h5
+
+  - id: PAAD_CRA001160_TISCH2
+    enabled: false
+    source: TISCH2
+    cancer_type: PDAC
+    cancer_name: Pancreatic ductal adenocarcinoma
+    tcna_site: Pancreas
+    study: Peng et al. 2019 (TISCH2 processing)
+    citation: "Peng J et al. Cell Res 29, 725-738 (2019); processed by TISCH2."
+    technology: 10x
+    site: primary
+    data_url: "https://tisch.compbio.cn/static/data/PAAD_CRA001160/PAAD_CRA001160_expression.h5"
+    meta_url: "https://tisch.compbio.cn/static/data/PAAD_CRA001160/PAAD_CRA001160_CellMetainfo_table.tsv"
+    archive: PAAD_CRA001160_expression.h5
+
+# Pipeline parameters. Every value below is an scTCNA choice (the TCNA manuscript
+# concerns bulk RNA-seq and does not define single-cell thresholds); see METHODS.md.
+params:
+  qc:
+    min_genes_per_cell: 200
+    min_counts_per_cell: 500
+    max_pct_mito: 20.0
+    min_cells_per_gene: 10
+    mito_prefix: "MT-"
+    run_scrublet: true
+    scrublet_min_cells_per_sample: 100
+  sampling:
+    max_cells_per_patient_compartment: 3000
+    seed: 0
+  groups:
+    min_cells_per_group: 20          # patient x compartment groups below this are dropped
+    min_patients_per_test: 5         # paired tests need at least this many patients
+    min_cells_per_celltype_group: 50 # patient x cell-type groups for lineage-level metrics
+  normalisation:
+    target_sum: 10000                # counts per 10k (CP10K); log2(CP10K + 1) for DEPTH/DEPTH2
+  metrics:
+    min_detection_rate: 0.10         # gene must be detected in >= 10% of cells (median over patients) to enter tests / top lists
+    lowess_frac: 0.3                 # mean-CV2 trend fit
+  downsampling:
+    enabled: true
+    depth_quantile: 0.10             # common UMI depth = 10th percentile of per-cell totals (floor below)
+    min_depth: 1000
+  depth:
+    min_detection_rate_genes: 0.01   # genes used for DEPTH/DEPTH2 must be detected in >= 1% of cells of the dataset
