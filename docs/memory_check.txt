@@ -1,0 +1,5 @@
+scTCNA app memory check (2026-10-08 23:41)
+data: data/app (10 datasets, 26366 genes)
+requests: 343 (every page, every heavy endpoint for every cancer type) in 12 s
+peak resident memory of the uvicorn process: 389 MB (limit on Render free tier: 512 MB)
+platform: Darwin arm64, Python 3.12.12

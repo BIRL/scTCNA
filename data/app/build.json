@@ -1,0 +1,16 @@
+{
+  "sctcna_version": "0.1.0",
+  "datasets": [
+    "BRCA_Wu2021",
+    "LUAD_Kim2020",
+    "COAD_Lee2020",
+    "HNSC_Kurten2021",
+    "GBM_Wang2019",
+    "LIHC_Ma2019",
+    "PDAC_Peng2019",
+    "SKCM_Biermann2022",
+    "OV_Zhang2022",
+    "KIRC_Zhang2021"
+  ],
+  "built": "2026-10-08T18:38:43Z"
+}
