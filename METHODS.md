@@ -298,13 +298,16 @@ tables within the 512 MB of the free hosting tier; `gene_summary` keeps float64.
   lineage-level table mitigates this by allowing malignant cells to be compared with one
   matched normal lineage.
 - Malignant calls come from the atlases (CNA-based) and are not re-derived here.
-- The melanoma study (Biermann et al. 2022) consists of metastases only.
+- The melanoma study (Biermann et al. 2022) consists of metastases only. The liver dataset
+  (Ma et al. 2019) mixes hepatocellular carcinoma and intrahepatic cholangiocarcinoma, as
+  TCNA's Liver site does, and is small (6 paired patients, 2,596 cells after QC). Sun et
+  al. 2021 was replaced because 3CA provides it only as normalised TPM values.
 - The per-patient cap and the uniform QC differ from the original studies' processing,
   so cell numbers do not match the publications.
 - TCNA's Pathway dashboard (STRING enrichment) is not replicated, and there is no custom
   data upload.
 - Only 10x UMI data are used; the TISCH2 loader is provided but its entries are disabled.
-- Statistical power of the paired tests is limited by patient numbers (roughly 8-27
+- Statistical power of the paired tests is limited by patient numbers (6-27
   paired patients per cancer type).
 - Dropout and zero inflation inflate CV and MAD for lowly expressed genes; the
   mean-corrected and downsampled versions are provided for this reason and should be read
