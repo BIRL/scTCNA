@@ -358,6 +358,33 @@ def _json_default(o):
     return str(o)
 
 
+def _compact(df: pd.DataFrame, categorical: list[str], float_columns: list[str] | None = None) -> pd.DataFrame:
+    """Shrink an app table: repeated strings become categoricals and display-only floats float32.
+
+    The web app holds every table in memory (512 MB on the free hosting tier),
+    so per-cell and per-patient tables are stored compactly; values used for
+    statistics (p/q-values in gene_summary) stay float64.
+    """
+    df = df.copy()
+    for c in categorical:
+        if c in df:
+            df[c] = df[c].astype(str).astype("category")
+    for c in float_columns or []:
+        if c in df:
+            df[c] = df[c].astype(np.float32)
+    return df
+
+
+def heterogeneity_tests(sample_scores: pd.DataFrame) -> pd.DataFrame:
+    """Paired malignant vs non-malignant tests of the per-patient DEPTH / DEPTH2 summaries, per cancer type."""
+    rows = []
+    for ct, df in sample_scores.groupby("cancer_type", observed=True):
+        for score in ("depth2", "depth"):
+            for level, column in (("cell", f"{score}_cell_median"), ("sample", f"{score}_pseudobulk")):
+                rows.append({"cancer_type": ct, "score": score, "level": level, **paired_score_test(df, column, min_patients=3)})
+    return pd.DataFrame(rows, columns=["cancer_type", "score", "level", "n_pairs", "median_diff", "p_value", "rank_biserial"])
+
+
 def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, manifest: dict | None = None) -> dict:
     """Combine per-dataset outputs into the tables served by the web app."""
     processed_dir, app_dir = Path(processed_dir), Path(app_dir)
@@ -380,9 +407,7 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
         pp = pp[pp["gene"].isin(keep_genes)]
         cols = ["dataset", "cancer_type", "patient", "compartment", "gene", "n_cells", "mean", "detection_rate", "cv", "mad", "fano", "cv2_resid", "cv_ds", "cv2_resid_ds"]
         pp = pp[cols].copy()
-        for c in cols[5:]:
-            if c != "n_cells":
-                pp[c] = pp[c].astype(np.float32)
+        pp = _compact(pp, ["dataset", "cancer_type", "patient", "compartment", "gene"], [c for c in cols[6:]])
         pp.to_parquet(app_dir / "patient" / f"{entry['id']}.parquet", index=False, compression="zstd")
         contrasts.append(pd.read_parquet(d / "noise_contrasts.parquet"))
         contrasts_patient.append(pd.read_parquet(d / "noise_contrasts_patient.parquet"))
@@ -452,12 +477,15 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
     datasets = pd.DataFrame(rows)
     datasets.to_parquet(app_dir / "datasets.parquet", index=False)
     pd.concat(gene_summaries, ignore_index=True).to_parquet(app_dir / "gene_summary.parquet", index=False, compression="zstd")
-    cs = pd.concat(cell_scores, ignore_index=True)
+    cs = _compact(pd.concat(cell_scores, ignore_index=True), ["dataset", "cancer_type", "patient", "cell_type", "compartment"], ["n_counts", "pct_mito", "depth", "depth2"])
     cs[["dataset", "cancer_type", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "depth", "depth2"]].to_parquet(
         app_dir / "cell_scores.parquet", index=False, compression="zstd"
     )
-    pd.concat(sample_scores, ignore_index=True).to_parquet(app_dir / "sample_scores.parquet", index=False, compression="zstd")
-    pd.concat(celltype_rows, ignore_index=True).to_parquet(app_dir / "celltype_summary.parquet", index=False, compression="zstd")
+    ss = pd.concat(sample_scores, ignore_index=True)
+    ss.to_parquet(app_dir / "sample_scores.parquet", index=False, compression="zstd")
+    heterogeneity_tests(ss).to_parquet(app_dir / "heterogeneity_tests.parquet", index=False)
+    cts = _compact(pd.concat(celltype_rows, ignore_index=True), ["dataset", "cancer_type", "cell_type", "gene"], ["mean", "detection_rate", "cv", "mad", "fano", "cv2_resid"])
+    cts.to_parquet(app_dir / "celltype_summary.parquet", index=False, compression="zstd")
     pd.concat(contrasts, ignore_index=True).to_parquet(app_dir / "noise_contrasts.parquet", index=False, compression="zstd")
     pd.concat(contrasts_patient, ignore_index=True).to_parquet(app_dir / "noise_contrasts_patient.parquet", index=False, compression="zstd")
     with open(app_dir / "build.json", "w") as fh:
