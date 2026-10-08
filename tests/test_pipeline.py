@@ -17,10 +17,10 @@ from scipy import stats as sps
 
 from sctcna import __version__
 from sctcna.config import load_config
-from sctcna.depth import depth2_matrix, depth2_per_cell, depth_matrix, gene_mean_sd, pseudobulk_log_cpm
+from sctcna.depth import depth2_matrix, depth2_per_cell, depth_matrix, depth_per_cell, gene_mean_sd, pseudobulk_log_cpm
 from sctcna.metrics import gene_noise_table
 from sctcna.normalize import log2p1, normalize_cp10k
-from sctcna.pipeline import CONTRAST_PATIENT_COLUMNS, CONTRAST_SUMMARY_COLUMNS, PATIENT_TABLE_COLUMNS, process_dataset
+from sctcna.pipeline import CONTRAST_PATIENT_COLUMNS, CONTRAST_Q_COLUMNS, CONTRAST_SUMMARY_COLUMNS, PATIENT_TABLE_COLUMNS, process_dataset
 from sctcna.qc import add_qc_metrics, filter_cells, filter_genes
 from sctcna.synthetic import make_synthetic_adata
 
@@ -36,7 +36,7 @@ GENE_SUMMARY_COLUMNS = [
     "mad_malignant", "mad_non_malignant", "fano_malignant", "fano_non_malignant", "cv2_resid_malignant", "cv2_resid_non_malignant",
     "n_patients_malignant", "n_patients_non_malignant", "n_pairs", "log2fc_cv_median", "log2fc_cv_mean", "wilcoxon_stat",
     "p_value", "rank_biserial", "q_value", "log2fc_mad_median", "p_value_mad", "q_value_mad", "log2fc_fano_median",
-    "p_value_fano", "q_value_fano", "cancer_type", "log2fc_cv_of_medians", "delta_cv2_resid", "expressed",
+    "p_value_fano", "q_value_fano", "delta_cv2_resid", "p_value_cv2_resid", "q_value_cv2_resid", "cancer_type", "log2fc_cv_of_medians", "expressed",
     "cv_pooled_malignant", "cv_pooled_non_malignant",
 ]  # fmt: skip
 SAMPLE_SCORE_COLUMNS = ["patient", "compartment", "n_cells", "depth2_pseudobulk", "depth_pseudobulk", "depth_cell_median", "depth2_cell_median", "dataset", "cancer_type"]
@@ -46,14 +46,14 @@ APP_COLUMNS = {
         "n_patients", "n_patients_paired", "n_cells_malignant", "n_cells_non_malignant", "n_genes", "n_genes_expressed", "doublets_removed",
         "downsampling_target_depth", "spearman_cv_vs_downsampled", "n_sig_q05", "n_sig_noisier_malignant", "n_sig_noisier_non_malignant",
         "median_log2fc_cv", "median_delta_cv2_resid", "depth2_pseudobulk_median_diff", "depth2_pseudobulk_p", "depth2_cell_median_diff",
-        "depth2_cell_p", "depth_cell_median_diff", "depth_cell_p", "log2fc_cv_ds_vs_non_malignant", "excess_cv2_ds_vs_non_malignant",
+        "depth2_cell_p", "log2fc_cv_ds_vs_non_malignant", "excess_cv2_ds_vs_non_malignant",
         "excess_cv2_ds_p", "download_date", "sha256", "sctcna_version", "runtime_seconds",
     ],
     "gene_summary.parquet": GENE_SUMMARY_COLUMNS,
     "cell_scores.parquet": ["dataset", "cancer_type", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "depth", "depth2"],
     "sample_scores.parquet": SAMPLE_SCORE_COLUMNS,
     "celltype_summary.parquet": ["dataset", "cancer_type", "cell_type", "gene", "n_patients", "mean", "detection_rate", "cv", "mad", "fano", "cv2_resid"],
-    "noise_contrasts.parquet": ["dataset", "cancer_type", *CONTRAST_SUMMARY_COLUMNS],
+    "noise_contrasts.parquet": ["dataset", "cancer_type", *CONTRAST_SUMMARY_COLUMNS, *CONTRAST_Q_COLUMNS],
     "noise_contrasts_patient.parquet": ["dataset", "cancer_type", *CONTRAST_PATIENT_COLUMNS],
 }  # fmt: skip
 PATIENT_APP_COLUMNS = ["dataset", "cancer_type", "patient", "compartment", "gene", "n_cells", "mean", "detection_rate", "cv", "mad", "fano", "cv2_resid", "cv_ds", "cv2_resid_ds"]
@@ -61,7 +61,7 @@ PROCESSED_COLUMNS = {
     "gene_metrics_patient.parquet": PATIENT_TABLE_COLUMNS,
     "gene_metrics_pooled.parquet": [c for c in PATIENT_TABLE_COLUMNS if not c.endswith("_ds")],
     "gene_metrics_celltype.parquet": ["dataset", "cancer_type", "patient", "cell_type", "gene", "n_cells", "mean", "detection_rate", "sd", "cv", "cv2", "mad", "fano", "cv2_resid", "mean_ds", "cv_ds"],
-    "noise_contrasts.parquet": ["dataset", "cancer_type", *CONTRAST_SUMMARY_COLUMNS],
+    "noise_contrasts.parquet": ["dataset", "cancer_type", *CONTRAST_SUMMARY_COLUMNS, *CONTRAST_Q_COLUMNS],
     "noise_contrasts_patient.parquet": ["dataset", "cancer_type", *CONTRAST_PATIENT_COLUMNS],
     "gene_summary.parquet": GENE_SUMMARY_COLUMNS,
     "cell_scores.parquet": ["cell_name", "sample", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "doublet_score", "depth", "depth2", "dataset", "cancer_type"],
@@ -124,7 +124,8 @@ def test_processed_outputs_exist_with_documented_columns(processed_dir):
         assert summary["dataset"] == ds and summary["sctcna_version"] == __version__
         for key in ("params", "qc", "n_patients", "n_patients_paired", "n_cells", "downsampling", "depth", "tests", "n_genes_expressed", "runtime_seconds"):
             assert key in summary, key
-        for score in ("depth2_pseudobulk", "depth2_cell_median", "depth_cell_median"):
+        assert "paired_test_depth_cell_median" not in summary["depth"]  # DEPTH has no non-malignant values to compare
+        for score in ("depth2_pseudobulk", "depth2_cell_median"):
             assert set(summary["depth"][f"paired_test_{score}"]) == {"n_pairs", "median_diff", "p_value", "rank_biserial"}
         assert summary["qc"]["doublets_removed"] == 0
         assert summary["n_patients"] == summary["n_patients_paired"] == N_PATIENTS[ds]
@@ -274,31 +275,43 @@ def test_sample_scores_one_row_per_patient_and_compartment(app_data_dir):
     non_malignant = ss["compartment"] == "non_malignant"
     assert ss.loc[non_malignant, "depth_pseudobulk"].isna().all()
     assert np.isfinite(ss.loc[~non_malignant, "depth_pseudobulk"]).all()
-    for col in ("depth2_pseudobulk", "depth_cell_median", "depth2_cell_median"):
+    for col in ("depth2_pseudobulk", "depth2_cell_median"):
         assert np.isfinite(ss[col]).all() and (ss[col] > 0).all(), col
+    # DEPTH is scored for malignant cells only; the non-malignant cells are its reference
+    assert ss.loc[non_malignant, "depth_cell_median"].isna().all()
+    assert (ss.loc[~non_malignant, "depth_cell_median"] > 0).all()
     medians = cells.groupby(["dataset", "patient", "compartment"])[["depth", "depth2"]].median()
     joined = ss.set_index(["dataset", "patient", "compartment"]).join(medians)
     np.testing.assert_allclose(joined["depth_cell_median"], joined["depth"], rtol=1e-6)
     np.testing.assert_allclose(joined["depth2_cell_median"], joined["depth2"], rtol=1e-6)
 
 
-def test_cell_scores_match_depth2_recomputed_from_the_fixture(processed_dir, app_data_dir, synthetic_adata, fast_params):
+def test_cell_scores_match_depth_recomputed_from_the_fixture(processed_dir, app_data_dir, synthetic_adata, fast_params):
     cells = pd.read_parquet(processed_dir / FIRST / "cell_scores.parquet")
-    assert np.isfinite(cells[["depth", "depth2"]]).all().all()
-    assert (cells[["depth", "depth2"]] > 0).all().all()
+    malignant = (cells["compartment"] == "malignant").to_numpy()
+    assert np.isfinite(cells["depth2"]).all() and (cells["depth2"] > 0).all()
+    assert np.isfinite(cells.loc[malignant, "depth"]).all() and cells.loc[~malignant, "depth"].isna().all()
     adata = _qc_like_pipeline(synthetic_adata, fast_params)
     assert cells["cell_name"].tolist() == adata.obs["cell_name"].tolist()
     np.testing.assert_array_equal(cells["n_counts"].to_numpy(), adata.obs["n_counts"].to_numpy())
     used = _depth_gene_mask(adata, fast_params)
     summary = json.loads((processed_dir / FIRST / "summary.json").read_text())
     assert summary["depth"]["n_genes_used"] == int(used.sum())
+    # straightforward re-implementation: normalise the whole matrix, keep the DEPTH genes, then
+    # DEPTH2 with z-scores inside each patient x compartment group and DEPTH of malignant cells
+    # against the mean of all non-malignant cells
     log_used = sp.csr_matrix(log2p1(normalize_cp10k(sp.csr_matrix(adata.X), fast_params["normalisation"]["target_sum"]))[:, used])
-    mean, sd = gene_mean_sd(log_used)
-    expected = depth2_per_cell(log_used, mean, sd)
-    np.testing.assert_allclose(cells["depth2"].to_numpy(), expected, rtol=0, atol=1e-8)
+    expected2 = np.full(adata.n_obs, np.nan)
+    for _, idx in adata.obs.groupby(["patient", "compartment"], observed=True).indices.items():
+        mean, sd = gene_mean_sd(log_used[idx])
+        expected2[idx] = depth2_per_cell(log_used[idx], mean, sd)
+    np.testing.assert_allclose(cells["depth2"].to_numpy(), expected2, rtol=0, atol=1e-8)
+    ref = np.asarray(log_used[~malignant].mean(axis=0), dtype=np.float64).ravel()
+    expected1 = depth_per_cell(log_used[malignant], ref)
+    np.testing.assert_allclose(cells.loc[malignant, "depth"].to_numpy(), expected1, rtol=1e-5)
     app_cells = pd.read_parquet(app_data_dir / "cell_scores.parquet")
     # the app copy is stored as float32 to keep the served tables small
-    np.testing.assert_allclose(app_cells.loc[app_cells["dataset"] == FIRST, "depth2"].to_numpy(), expected, rtol=1e-6)
+    np.testing.assert_allclose(app_cells.loc[app_cells["dataset"] == FIRST, "depth2"].to_numpy(), expected2, rtol=1e-6)
 
 
 def test_pseudobulk_scores_match_recomputation_from_counts(processed_dir, synthetic_adata, fast_params):

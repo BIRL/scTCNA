@@ -60,31 +60,41 @@ def compartment_medians(metrics_long: pd.DataFrame, metrics: list[str] | None = 
 def paired_noise_tests(
     metrics_long: pd.DataFrame,
     metric: str = "cv",
-    min_patients: int = 5,
+    min_patients: int = 6,
     treat: str = "malignant",
     control: str = "non_malignant",
+    difference: bool = False,
 ) -> pd.DataFrame:
-    """Per (dataset, gene) paired malignant vs non-malignant test on log2(metric).
+    """Per (dataset, gene) paired malignant vs non-malignant test across patients.
 
-    Returns n_pairs, median/mean per-patient log2 fold change (TCNA Eq. 1 per
-    patient when metric = 'cv'), Wilcoxon signed-rank statistic and p-value,
-    the matched-pairs rank-biserial effect size, and BH q-values per dataset.
+    The per-patient contrast is log2(metric_treat / metric_control) (TCNA Eq. 1
+    per patient when metric = 'cv'), or the plain difference when
+    ``difference`` is set (for metrics already on a log scale, such as the
+    LOWESS residual). Returns n_pairs, the median and mean per-patient contrast
+    (``log2fc_<metric>_*`` or ``delta_<metric>_*``), the Wilcoxon signed-rank
+    statistic and p-value, the matched-pairs rank-biserial effect size, and BH
+    q-values per dataset.
     """
+    prefix = f"delta_{metric}" if difference else f"log2fc_{metric}"
     sub = metrics_long[metrics_long["compartment"].isin([treat, control])]
     wide = sub.pivot_table(index=["dataset", "gene", "patient"], columns="compartment", values=metric, aggfunc="first", observed=True)
     if treat not in wide.columns or control not in wide.columns:
-        return pd.DataFrame(columns=["dataset", "gene", "n_pairs", f"log2fc_{metric}_median", f"log2fc_{metric}_mean", "wilcoxon_stat", "p_value", "rank_biserial", "q_value"])
+        return pd.DataFrame(columns=["dataset", "gene", "n_pairs", f"{prefix}_median", f"{prefix}_mean", "wilcoxon_stat", "p_value", "rank_biserial", "q_value"])
     a = wide[treat].to_numpy(dtype=float)
     b = wide[control].to_numpy(dtype=float)
-    ok = np.isfinite(a) & np.isfinite(b) & (a > 0) & (b > 0)
     d = np.full(a.shape, np.nan)
-    d[ok] = np.log2(a[ok] / b[ok])
+    if difference:
+        ok = np.isfinite(a) & np.isfinite(b)
+        d[ok] = a[ok] - b[ok]
+    else:
+        ok = np.isfinite(a) & np.isfinite(b) & (a > 0) & (b > 0)
+        d[ok] = np.log2(a[ok] / b[ok])
     pairs = pd.DataFrame({"d": d}, index=wide.index).dropna().reset_index()
     rows = []
     for (ds, gene), grp in pairs.groupby(["dataset", "gene"], observed=True, sort=False):
         dd = grp["d"].to_numpy()
         n = dd.size
-        rec = {"dataset": ds, "gene": gene, "n_pairs": n, f"log2fc_{metric}_median": float(np.median(dd)), f"log2fc_{metric}_mean": float(dd.mean())}
+        rec = {"dataset": ds, "gene": gene, "n_pairs": n, f"{prefix}_median": float(np.median(dd)), f"{prefix}_mean": float(dd.mean())}
         if n >= min_patients:
             nz = dd[dd != 0]
             if nz.size == 0:
@@ -106,7 +116,7 @@ def paired_noise_tests(
     return out
 
 
-def paired_score_test(sample_scores: pd.DataFrame, score: str, treat: str = "malignant", control: str = "non_malignant", min_patients: int = 3) -> dict:
+def paired_score_test(sample_scores: pd.DataFrame, score: str, treat: str = "malignant", control: str = "non_malignant", min_patients: int = 6) -> dict:
     """Paired Wilcoxon of a per-patient score (e.g. DEPTH2) between compartments."""
     wide = sample_scores.pivot_table(index="patient", columns="compartment", values=score, aggfunc="first", observed=True)
     if treat not in wide.columns or control not in wide.columns:
@@ -121,7 +131,7 @@ def paired_score_test(sample_scores: pd.DataFrame, score: str, treat: str = "mal
     return rec
 
 
-def one_sample_wilcoxon(values, min_n: int = 5) -> dict:
+def one_sample_wilcoxon(values, min_n: int = 6) -> dict:
     """Wilcoxon signed-rank test of per-patient values against 0 (two-sided) with the rank-biserial effect size."""
     v = np.asarray(values, dtype=float)
     v = v[np.isfinite(v)]

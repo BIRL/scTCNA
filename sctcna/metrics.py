@@ -12,7 +12,8 @@ Definitions follow the TCNA manuscript (Shah et al. 2026) and the TCNA code:
 Single-cell additions (scTCNA assumptions, see METHODS.md):
 
 * detection_rate : fraction of cells with a non-zero value
-* Fano           : variance / mean (Poisson noise gives Fano = 1)
+* Fano           : variance / mean on the CP10K scale (for Poisson counts at library
+                   size N this is about 10^4 / N, so it depends on sequencing depth)
 * cv2_resid      : residual of log10(CV^2) from a LOWESS trend on log10(mean),
                    fitted across genes within the same group of cells, i.e.
                    noise corrected for its dependence on mean expression.
@@ -67,7 +68,8 @@ def gene_moments(X) -> dict[str, np.ndarray]:
     mean = s1 / n if n else np.full(g, np.nan)
     if n > 1:
         var = (s2 - n * mean**2) / (n - 1)
-        var = np.where(var < 0, 0.0, var)  # numerical noise on constant genes
+        # one-pass variance: rounding can leave a tiny positive or negative value for constant genes
+        var = np.where(var <= 1e-12 * mean**2, 0.0, var)
     else:
         var = np.full(g, np.nan)
     return {"n_cells": np.full(g, n, dtype=np.int64), "mean": mean, "var": var, "sd": np.sqrt(var), "detection_rate": nnz / n if n else np.full(g, np.nan), "_nnz": nnz}

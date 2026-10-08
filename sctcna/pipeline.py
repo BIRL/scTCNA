@@ -34,7 +34,7 @@ from .io import MALIGNANT, NON_MALIGNANT
 from .metrics import METRIC_COLUMNS, gene_noise_table, log2_fold_change, mean_trend_residual, trend_excess
 from .normalize import normalize_cp10k
 from .qc import add_qc_metrics, common_depth_target, downsample_counts, filter_cells, filter_genes, run_scrublet
-from .stats import compartment_medians, one_sample_wilcoxon, paired_noise_tests, paired_score_test
+from .stats import bh_adjust, compartment_medians, one_sample_wilcoxon, paired_noise_tests, paired_score_test
 
 log = logging.getLogger(__name__)
 
@@ -96,6 +96,7 @@ CONTRAST_SUMMARY_COLUMNS = [
     "rank_biserial_excess",
     "frac_patients_excess_positive",
 ]
+CONTRAST_Q_COLUMNS = ["q_log2fc_cv", "q_log2fc_cv_ds", "q_excess_cv2_ds"]
 
 
 def noise_contrasts(per_patient: pd.DataFrame, per_celltype: pd.DataFrame, min_det: float, frac: float, min_patients: int) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -164,7 +165,13 @@ def noise_contrasts(per_patient: pd.DataFrame, per_celltype: pd.DataFrame, min_d
                 "frac_patients_excess_positive": t_ex["frac_positive"],
             }
         )
-    return per, pd.DataFrame(out, columns=CONTRAST_SUMMARY_COLUMNS)
+    summ = pd.DataFrame(out, columns=CONTRAST_SUMMARY_COLUMNS)
+    # BH over every (reference, measure) test of the dataset
+    p_cols = ["p_log2fc_cv", "p_log2fc_cv_ds", "p_excess_cv2_ds"]
+    q = bh_adjust(summ[p_cols].to_numpy(dtype=float).ravel()).reshape(len(summ), len(p_cols)) if len(summ) else np.empty((0, 3))
+    for j, c in enumerate(p_cols):
+        summ["q" + c[1:]] = q[:, j]
+    return per, summ
 
 
 def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | Path) -> dict:
@@ -177,7 +184,11 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
 
     # 1. QC -----------------------------------------------------------------
     # new AnnData with copied annotations; the count matrix is shared (it is only read, never modified in place)
-    adata = ad.AnnData(X=sp.csr_matrix(adata.X, dtype=np.int32), obs=adata.obs.copy(), var=adata.var.copy(), uns=dict(adata.uns))
+    X_in = sp.csr_matrix(adata.X)
+    if not np.issubdtype(X_in.dtype, np.integer) and not np.all(np.mod(X_in.data, 1) == 0):
+        raise ValueError(f"{meta['id']}: the expression matrix is not integer UMI counts; the pipeline expects raw counts")
+    adata = ad.AnnData(X=sp.csr_matrix(X_in, dtype=np.int32), obs=adata.obs.copy(), var=adata.var.copy(), uns=dict(adata.uns))
+    del X_in
     add_qc_metrics(adata, qc["mito_prefix"])
     adata, cell_stats = filter_cells(adata, qc["min_genes_per_cell"], qc["min_counts_per_cell"], qc["max_pct_mito"])
     adata, gene_stats = filter_genes(adata, qc["min_cells_per_gene"])
@@ -189,6 +200,10 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     # drop patient x compartment groups that are too small after QC
     sizes = adata.obs.groupby(["patient", "compartment"], observed=True)["cell_name"].transform("size")
     adata = adata[(sizes >= grp["min_cells_per_group"]).to_numpy()].copy()
+    # per-cell totals over the genes that survived QC (used for the downsampling target and exported)
+    X_qc = sp.csr_matrix(adata.X)
+    adata.obs["n_counts"] = np.asarray(X_qc.sum(axis=1)).ravel()
+    adata.obs["n_genes"] = np.diff(X_qc.indptr)
     summary["qc"] = {**cell_stats, **gene_stats, **doublet_stats, "cells_final": int(adata.n_obs), "genes_final": int(adata.n_vars)}
     comp_counts = adata.obs.groupby(["patient", "compartment"], observed=True).size().unstack(fill_value=0)
     summary["n_patients"] = int(adata.obs["patient"].nunique())
@@ -253,8 +268,10 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     det = np.bincount(counts.indices, minlength=adata.n_vars) / adata.n_obs
     depth_genes = det >= depth_p["min_detection_rate_genes"]
     is_non_mal = (adata.obs["compartment"] == NON_MALIGNANT).to_numpy()
-    # DEPTH reference = mean over non-malignant cells (all cells when there are none); DEPTH2 z-scores across all cells
-    cell_depth, cell_depth2 = depth_scores_from_counts(counts, depth_genes, is_non_mal, norm_p["target_sum"])
+    is_mal = (adata.obs["compartment"] == MALIGNANT).to_numpy()
+    groups_pc = (adata.obs["patient"].astype(str) + "|" + adata.obs["compartment"].astype(str)).to_numpy()
+    # DEPTH: malignant cells against the mean of the non-malignant cells; DEPTH2: z-scores within patient x compartment
+    cell_depth, cell_depth2 = depth_scores_from_counts(counts, depth_genes, groups_pc, is_mal, is_non_mal, norm_p["target_sum"])
     cell_scores = adata.obs[["cell_name", "sample", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "doublet_score"]].copy()
     cell_scores["depth"] = cell_depth
     cell_scores["depth2"] = cell_depth2
@@ -285,10 +302,10 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     sample_scores["dataset"] = meta["id"]
     sample_scores["cancer_type"] = meta["cancer_type"]
     summary["depth"] = {"n_genes_used": int(depth_genes.sum())}
-    # DEPTH on pseudo-bulks is only defined for malignant samples (non-malignant pseudo-bulks are the reference),
-    # so a paired test is possible for the other three scores only.
-    for score in ("depth2_pseudobulk", "depth2_cell_median", "depth_cell_median"):
-        summary["depth"][f"paired_test_{score}"] = paired_score_test(sample_scores, score, min_patients=3)
+    # DEPTH is only defined for malignant samples (the non-malignant cells are its reference), so only the two
+    # DEPTH2 summaries can be compared between compartments.
+    for score in ("depth2_pseudobulk", "depth2_cell_median"):
+        summary["depth"][f"paired_test_{score}"] = paired_score_test(sample_scores, score, min_patients=grp["min_patients_per_test"])
 
     # 6. gene summary + paired tests -----------------------------------------------------
     medians = compartment_medians(per_patient)
@@ -304,14 +321,16 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     tests_fano = paired_noise_tests(tested, "fano", grp["min_patients_per_test"])[["dataset", "gene", "log2fc_fano_median", "p_value", "q_value"]].rename(
         columns={"p_value": "p_value_fano", "q_value": "q_value_fano"}
     )
-    gene_summary = (
-        medians.merge(tests_cv, on=["dataset", "gene"], how="left").merge(tests_mad, on=["dataset", "gene"], how="left").merge(tests_fano, on=["dataset", "gene"], how="left")
-    )
+    # mean-corrected CV^2: paired per-patient differences of the LOWESS residuals (already on a log10 scale)
+    tests_resid = paired_noise_tests(tested, "cv2_resid", grp["min_patients_per_test"], difference=True)[
+        ["dataset", "gene", "delta_cv2_resid_median", "p_value", "q_value"]
+    ].rename(columns={"delta_cv2_resid_median": "delta_cv2_resid", "p_value": "p_value_cv2_resid", "q_value": "q_value_cv2_resid"})
+    gene_summary = medians
+    for t in (tests_cv, tests_mad, tests_fano, tests_resid):
+        gene_summary = gene_summary.merge(t, on=["dataset", "gene"], how="left")
     gene_summary["cancer_type"] = meta["cancer_type"]
     # Eq. 1 on the cancer-type (median across patients) values, for display next to the per-patient version
     gene_summary["log2fc_cv_of_medians"] = log2_fold_change(gene_summary.get(f"cv_{MALIGNANT}"), gene_summary.get(f"cv_{NON_MALIGNANT}"))
-    if f"cv2_resid_{MALIGNANT}" in gene_summary and f"cv2_resid_{NON_MALIGNANT}" in gene_summary:
-        gene_summary["delta_cv2_resid"] = gene_summary[f"cv2_resid_{MALIGNANT}"] - gene_summary[f"cv2_resid_{NON_MALIGNANT}"]
     # pooled-vs-patient comparison (pseudoreplication diagnostic): CV from pooled cells vs median across patients
     pooled_cv = pooled.pivot_table(index="gene", columns="compartment", values="cv", aggfunc="first", observed=True)
     pooled_cv.columns = [f"cv_pooled_{c}" for c in pooled_cv.columns]
@@ -325,6 +344,7 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
         "n_sig_q05_noisier_non_malignant": int(((sig["q_value"] < 0.05) & (sig["log2fc_cv_median"] < 0)).sum()),
         "median_log2fc_cv_expressed_genes": float(sig["log2fc_cv_median"].median()) if len(sig) else np.nan,
         "median_delta_cv2_resid_expressed_genes": float(sig["delta_cv2_resid"].median()) if "delta_cv2_resid" in sig and len(sig) else np.nan,
+        "n_sig_q05_cv2_resid": int((sig["q_value_cv2_resid"] < 0.05).sum()),
     }
 
     # 7. malignant vs non-malignant / single-lineage noise contrasts ------------------------
@@ -378,13 +398,15 @@ def _compact(df: pd.DataFrame, categorical: list[str], float_columns: list[str] 
     return df
 
 
-def heterogeneity_tests(sample_scores: pd.DataFrame) -> pd.DataFrame:
-    """Paired malignant vs non-malignant tests of the per-patient DEPTH / DEPTH2 summaries, per cancer type."""
+def heterogeneity_tests(sample_scores: pd.DataFrame, min_patients: int = 6) -> pd.DataFrame:
+    """Paired malignant vs non-malignant tests of the per-patient DEPTH2 summaries, per cancer type.
+
+    DEPTH has no non-malignant values (those cells are its reference), so it is not tested.
+    """
     rows = []
     for ct, df in sample_scores.groupby("cancer_type", observed=True):
-        for score in ("depth2", "depth"):
-            for level, column in (("cell", f"{score}_cell_median"), ("sample", f"{score}_pseudobulk")):
-                rows.append({"cancer_type": ct, "score": score, "level": level, **paired_score_test(df, column, min_patients=3)})
+        for level, column in (("cell", "depth2_cell_median"), ("sample", "depth2_pseudobulk")):
+            rows.append({"cancer_type": ct, "score": "depth2", "level": level, **paired_score_test(df, column, min_patients=min_patients)})
     return pd.DataFrame(rows, columns=["cancer_type", "score", "level", "n_pairs", "median_diff", "p_value", "rank_biserial"])
 
 
@@ -466,8 +488,6 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
                 "depth2_pseudobulk_p": s["depth"]["paired_test_depth2_pseudobulk"]["p_value"],
                 "depth2_cell_median_diff": s["depth"]["paired_test_depth2_cell_median"]["median_diff"],
                 "depth2_cell_p": s["depth"]["paired_test_depth2_cell_median"]["p_value"],
-                "depth_cell_median_diff": s["depth"]["paired_test_depth_cell_median"]["median_diff"],
-                "depth_cell_p": s["depth"]["paired_test_depth_cell_median"]["p_value"],
                 "log2fc_cv_ds_vs_non_malignant": s.get("contrast_vs_non_malignant", {}).get("median_log2fc_cv_ds"),
                 "excess_cv2_ds_vs_non_malignant": s.get("contrast_vs_non_malignant", {}).get("median_excess_cv2_ds"),
                 "excess_cv2_ds_p": s.get("contrast_vs_non_malignant", {}).get("p_excess_cv2_ds"),
@@ -486,7 +506,8 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
     )
     ss = pd.concat(sample_scores, ignore_index=True)
     ss.to_parquet(app_dir / "sample_scores.parquet", index=False, compression="zstd")
-    heterogeneity_tests(ss).to_parquet(app_dir / "heterogeneity_tests.parquet", index=False)
+    min_patients = registry.get("params", {}).get("groups", {}).get("min_patients_per_test", 6)
+    heterogeneity_tests(ss, min_patients).to_parquet(app_dir / "heterogeneity_tests.parquet", index=False)
     cts = _compact(pd.concat(celltype_rows, ignore_index=True), ["dataset", "cancer_type", "cell_type", "gene"], ["mean", "detection_rate", "cv", "mad", "fano", "cv2_resid"])
     cts.to_parquet(app_dir / "celltype_summary.parquet", index=False, compression="zstd")
     pd.concat(contrasts, ignore_index=True).to_parquet(app_dir / "noise_contrasts.parquet", index=False, compression="zstd")

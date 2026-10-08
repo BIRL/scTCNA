@@ -211,7 +211,7 @@ params:
     seed: 0
   groups:
     min_cells_per_group: 20          # patient x compartment groups below this are dropped
-    min_patients_per_test: 5         # paired tests need at least this many patients
+    min_patients_per_test: 6         # paired tests need at least this many patients (n = 5 cannot reach p < 0.05)
     min_cells_per_celltype_group: 50 # patient x cell-type groups for lineage-level metrics
   normalisation:
     target_sum: 10000                # counts per 10k (CP10K); log2(CP10K + 1) for DEPTH/DEPTH2
