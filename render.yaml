@@ -1,18 +1,18 @@
 # Render Blueprint for the scTCNA web app (https://render.com/docs/blueprint-spec).
 #
-# Free web service built from the Dockerfile: 512 MB RAM, shared CPU, spins down after
-# 15 minutes without traffic and wakes on the next request. The app serves precomputed
-# Parquet tables (data/app must be committed), so the free instance is sufficient.
+# Free web service built from the Dockerfile: 512 MB RAM, shared CPU, no card needed.
+# It spins down after 15 minutes without traffic and wakes on the next request
+# (about a minute). The app only serves the precomputed Parquet tables in data/app,
+# which must be committed; peak memory with all ten cancer types is listed in docs/DEPLOY.md.
 #
-# One-command deploy after pushing the repository to GitHub:
-#   https://dashboard.render.com/blueprints  ->  New Blueprint Instance  ->  pick the repo
-# or with the Render CLI:  render blueprint launch
+# Deploy: push the repository to GitHub, then on https://dashboard.render.com choose
+# New > Blueprint, pick the repository and click Apply. Render injects PORT itself.
 services:
   - type: web
     name: sctcna
     runtime: docker
     plan: free
-    region: frankfurt
+    region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
@@ -20,7 +20,3 @@ services:
     envVars:
       - key: SCTCNA_DATA_DIR
         value: /app/data/app
-      - key: PORT
-        value: "7860"
-      - key: WEB_CONCURRENCY
-        value: "1"

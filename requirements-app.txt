@@ -1,13 +1,10 @@
-# Runtime dependencies of the web app only. The app serves precomputed Parquet
-# tables, so the pipeline stack (scanpy, anndata, scrublet, scikit-learn, h5py)
-# is deliberately left out to keep the image small.
+# Runtime dependencies of the web app only (used by the Dockerfile). The app serves
+# precomputed Parquet tables and imports neither the pipeline stack (scanpy, anndata,
+# scrublet, scikit-learn, h5py) nor SciPy/statsmodels, which keeps the image small and
+# the memory footprint inside the 512 MB of Render's free tier.
 # Every pin here must match requirements.txt; bump both files together.
 fastapi==0.142.3
 uvicorn[standard]==0.54.0
-python-multipart==0.0.32
 pandas==3.0.6
 pyarrow==25.0.1
 numpy==2.5.3
-scipy==1.18.1
-statsmodels==0.15.0
-pyyaml==6.0.3

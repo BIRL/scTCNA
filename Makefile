@@ -8,7 +8,6 @@
 #   make test / test-e2e   unit tests / Playwright browser tests
 #   make lint / format     ruff check + format --check / apply formatting
 #   make docker-build/run  build and run the deployment image locally
-#   make deploy-hf         push HEAD to a Hugging Face Space (HF_TOKEN, HF_SPACE)
 #
 # Overridable: APP_DATA=data/app_syn (serve the synthetic tables), DATASETS="LUAD_Kim2020 ..."
 # (restrict the pipeline), PORT=8000, IMAGE=sctcna:latest.
@@ -33,7 +32,7 @@ VENV_CREATE = $(PYTHON) -m venv $(VENV)
 PIP_INSTALL = $(PY) -m pip install
 endif
 
-.PHONY: venv install data pipeline aggregate app test test-e2e lint format docker-build docker-run deploy-hf
+.PHONY: venv install data pipeline aggregate app test test-e2e lint format docker-build docker-run
 
 venv:
 	test -d $(VENV) || $(VENV_CREATE)
@@ -73,7 +72,3 @@ docker-build:
 
 docker-run:
 	docker run --rm -p 7860:7860 $(IMAGE)
-
-# HF_TOKEN is read from the environment by the script; never pass it as a make variable.
-deploy-hf:
-	HF_SPACE="$(HF_SPACE)" bash scripts/deploy_hf.sh
