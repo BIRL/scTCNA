@@ -20,7 +20,7 @@ from sctcna.config import load_config
 from sctcna.depth import depth2_matrix, depth2_per_cell, depth_matrix, gene_mean_sd, pseudobulk_log_cpm
 from sctcna.metrics import gene_noise_table
 from sctcna.normalize import log2p1, normalize_cp10k
-from sctcna.pipeline import PATIENT_TABLE_COLUMNS, process_dataset
+from sctcna.pipeline import CONTRAST_PATIENT_COLUMNS, CONTRAST_SUMMARY_COLUMNS, PATIENT_TABLE_COLUMNS, process_dataset
 from sctcna.qc import add_qc_metrics, filter_cells, filter_genes
 from sctcna.synthetic import make_synthetic_adata
 
@@ -46,18 +46,23 @@ APP_COLUMNS = {
         "n_patients", "n_patients_paired", "n_cells_malignant", "n_cells_non_malignant", "n_genes", "n_genes_expressed", "doublets_removed",
         "downsampling_target_depth", "spearman_cv_vs_downsampled", "n_sig_q05", "n_sig_noisier_malignant", "n_sig_noisier_non_malignant",
         "median_log2fc_cv", "median_delta_cv2_resid", "depth2_pseudobulk_median_diff", "depth2_pseudobulk_p", "depth2_cell_median_diff",
-        "depth2_cell_p", "depth_cell_median_diff", "depth_cell_p", "download_date", "sha256", "sctcna_version", "runtime_seconds",
+        "depth2_cell_p", "depth_cell_median_diff", "depth_cell_p", "log2fc_cv_ds_vs_non_malignant", "excess_cv2_ds_vs_non_malignant",
+        "excess_cv2_ds_p", "download_date", "sha256", "sctcna_version", "runtime_seconds",
     ],
     "gene_summary.parquet": GENE_SUMMARY_COLUMNS,
     "cell_scores.parquet": ["dataset", "cancer_type", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "depth", "depth2"],
     "sample_scores.parquet": SAMPLE_SCORE_COLUMNS,
     "celltype_summary.parquet": ["dataset", "cancer_type", "cell_type", "gene", "n_patients", "mean", "detection_rate", "cv", "mad", "fano", "cv2_resid"],
+    "noise_contrasts.parquet": ["dataset", "cancer_type", *CONTRAST_SUMMARY_COLUMNS],
+    "noise_contrasts_patient.parquet": ["dataset", "cancer_type", *CONTRAST_PATIENT_COLUMNS],
 }  # fmt: skip
 PATIENT_APP_COLUMNS = ["dataset", "cancer_type", "patient", "compartment", "gene", "n_cells", "mean", "detection_rate", "cv", "mad", "fano", "cv2_resid", "cv_ds", "cv2_resid_ds"]
 PROCESSED_COLUMNS = {
     "gene_metrics_patient.parquet": PATIENT_TABLE_COLUMNS,
     "gene_metrics_pooled.parquet": [c for c in PATIENT_TABLE_COLUMNS if not c.endswith("_ds")],
-    "gene_metrics_celltype.parquet": ["dataset", "cancer_type", "patient", "cell_type", "gene", "n_cells", "mean", "detection_rate", "sd", "cv", "cv2", "mad", "fano", "cv2_resid"],
+    "gene_metrics_celltype.parquet": ["dataset", "cancer_type", "patient", "cell_type", "gene", "n_cells", "mean", "detection_rate", "sd", "cv", "cv2", "mad", "fano", "cv2_resid", "mean_ds", "cv_ds"],
+    "noise_contrasts.parquet": ["dataset", "cancer_type", *CONTRAST_SUMMARY_COLUMNS],
+    "noise_contrasts_patient.parquet": ["dataset", "cancer_type", *CONTRAST_PATIENT_COLUMNS],
     "gene_summary.parquet": GENE_SUMMARY_COLUMNS,
     "cell_scores.parquet": ["cell_name", "sample", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "doublet_score", "depth", "depth2", "dataset", "cancer_type"],
     "sample_scores.parquet": SAMPLE_SCORE_COLUMNS,
@@ -383,3 +388,18 @@ def test_process_dataset_without_celltype_groups_writes_an_empty_celltype_table(
     table = pd.read_parquet(tmp_path / "SYN_Test" / "gene_metrics_celltype.parquet")
     assert table.empty
     _assert_columns(table, PROCESSED_COLUMNS["gene_metrics_celltype.parquet"], "gene_metrics_celltype.parquet")
+
+
+def test_noise_contrast_tables(processed_dir, app_data_dir):
+    per = pd.read_parquet(processed_dir / "SYN_Test" / "noise_contrasts_patient.parquet")
+    summ = pd.read_parquet(processed_dir / "SYN_Test" / "noise_contrasts.parquet")
+    assert {"non_malignant", "T_cell", "Fibroblast", "Epithelial"} <= set(summ["reference"])
+    allref = per[per["reference"] == "non_malignant"]
+    assert allref["patient"].nunique() == 6 and (allref["n_genes"] > 100).all()
+    # simulated compartments share means and depth, so the median contrast over all genes is close to zero
+    assert allref["excess_cv2_ds"].abs().max() < 0.1
+    row = summ.set_index("reference").loc["non_malignant"]
+    assert row["n_patients"] == 6 and 0 <= row["p_excess_cv2_ds"] <= 1
+    app = pd.read_parquet(app_data_dir / "noise_contrasts.parquet")
+    assert set(app["dataset"]) == {"SYN_Test", "SYN_Two"}
+    assert "excess_cv2_ds_vs_non_malignant" in pd.read_parquet(app_data_dir / "datasets.parquet").columns

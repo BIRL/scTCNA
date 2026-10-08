@@ -30,10 +30,10 @@ from scipy import stats as sps
 from . import __version__
 from .depth import depth2_matrix, depth2_per_cell, depth_matrix, depth_per_cell, gene_mean_sd, pseudobulk_log_cpm
 from .io import MALIGNANT, NON_MALIGNANT
-from .metrics import METRIC_COLUMNS, gene_noise_table, log2_fold_change, mean_trend_residual
+from .metrics import METRIC_COLUMNS, gene_noise_table, log2_fold_change, mean_trend_residual, trend_excess
 from .normalize import log2p1, normalize_cp10k, select_columns
 from .qc import add_qc_metrics, common_depth_target, downsample_counts, filter_cells, filter_genes, run_scrublet
-from .stats import compartment_medians, paired_noise_tests, paired_score_test
+from .stats import compartment_medians, one_sample_wilcoxon, paired_noise_tests, paired_score_test
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +80,90 @@ def _metrics_for_groups(norm: sp.csr_matrix, groups: pd.core.groupby.DataFrameGr
     if not frames:
         return pd.DataFrame(columns=["gene", *METRIC_COLUMNS, "cv2_resid", *keys])
     return pd.concat(frames, ignore_index=True)
+
+
+CONTRAST_PATIENT_COLUMNS = ["patient", "reference", "n_cells_malignant", "n_cells_reference", "n_genes", "log2fc_cv", "log2fc_cv_ds", "excess_cv2_ds"]
+CONTRAST_SUMMARY_COLUMNS = [
+    "reference",
+    "n_patients",
+    "median_log2fc_cv",
+    "p_log2fc_cv",
+    "median_log2fc_cv_ds",
+    "p_log2fc_cv_ds",
+    "median_excess_cv2_ds",
+    "p_excess_cv2_ds",
+    "rank_biserial_excess",
+    "frac_patients_excess_positive",
+]
+
+
+def noise_contrasts(per_patient: pd.DataFrame, per_celltype: pd.DataFrame, min_det: float, frac: float, min_patients: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Patient-level summaries of how noisy malignant cells are relative to a reference group.
+
+    References are all non-malignant cells of the patient and, separately, each
+    non-malignant cell type with enough cells. For every patient and reference,
+    over genes detected in >= ``min_det`` of cells in both groups:
+
+    * ``log2fc_cv``     median over genes of log2(CV_malignant / CV_reference) (TCNA Eq. 1)
+    * ``log2fc_cv_ds``  the same after downsampling all cells to a common UMI depth
+    * ``excess_cv2_ds`` median over genes of the malignant log10(CV^2) residual from the
+                        reference's mean-CV^2 trend, at matched depth (mean-corrected)
+
+    Each per-patient value is then tested against 0 across patients (Wilcoxon
+    signed-rank), so the patient is the unit of replication. scTCNA addition.
+    """
+    mal = per_patient[per_patient["compartment"] == MALIGNANT].set_index(["patient", "gene"])
+    refs = [(NON_MALIGNANT, per_patient[per_patient["compartment"] == NON_MALIGNANT])]
+    lineages = per_celltype[per_celltype["cell_type"] != "Malignant"]
+    for ct, df in lineages.groupby("cell_type", observed=True):
+        refs.append((str(ct), df))
+    rows = []
+    for ref_name, ref_df in refs:
+        for patient, r in ref_df.groupby("patient", observed=True):
+            if patient not in mal.index.get_level_values(0):
+                continue
+            m = mal.loc[patient]
+            r = r.set_index("gene")
+            shared = m.index.intersection(r.index)
+            m, rr = m.loc[shared], r.loc[shared]
+            keep = (m["detection_rate"] >= min_det) & (rr["detection_rate"] >= min_det)
+            m_e, r_e = m[keep], rr[keep]
+            fc = log2_fold_change(m_e["cv"], r_e["cv"])
+            fc_ds = log2_fold_change(m_e["cv_ds"], r_e["cv_ds"])
+            excess = trend_excess(r["mean_ds"], r["cv_ds"] ** 2, m_e["mean_ds"], m_e["cv_ds"] ** 2, frac=frac)
+            rows.append(
+                {
+                    "patient": patient,
+                    "reference": ref_name,
+                    "n_cells_malignant": int(m["n_cells"].iloc[0]) if len(m) else 0,
+                    "n_cells_reference": int(r["n_cells"].iloc[0]) if len(r) else 0,
+                    "n_genes": int(keep.sum()),
+                    "log2fc_cv": float(np.nanmedian(fc)) if np.isfinite(fc).any() else np.nan,
+                    "log2fc_cv_ds": float(np.nanmedian(fc_ds)) if np.isfinite(fc_ds).any() else np.nan,
+                    "excess_cv2_ds": float(np.nanmedian(excess)) if np.isfinite(excess).any() else np.nan,
+                }
+            )
+    per = pd.DataFrame(rows, columns=CONTRAST_PATIENT_COLUMNS)
+    out = []
+    for ref_name, g in per.groupby("reference", observed=True, sort=False):
+        t_fc = one_sample_wilcoxon(g["log2fc_cv"], min_patients)
+        t_ds = one_sample_wilcoxon(g["log2fc_cv_ds"], min_patients)
+        t_ex = one_sample_wilcoxon(g["excess_cv2_ds"], min_patients)
+        out.append(
+            {
+                "reference": ref_name,
+                "n_patients": int(g["patient"].nunique()),
+                "median_log2fc_cv": t_fc["median"],
+                "p_log2fc_cv": t_fc["p_value"],
+                "median_log2fc_cv_ds": t_ds["median"],
+                "p_log2fc_cv_ds": t_ds["p_value"],
+                "median_excess_cv2_ds": t_ex["median"],
+                "p_excess_cv2_ds": t_ex["p_value"],
+                "rank_biserial_excess": t_ex["rank_biserial"],
+                "frac_patients_excess_positive": t_ex["frac_positive"],
+            }
+        )
+    return per, pd.DataFrame(out, columns=CONTRAST_SUMMARY_COLUMNS)
 
 
 def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | Path) -> dict:
@@ -135,6 +219,9 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
             columns={"mean": "mean_ds", "cv": "cv_ds", "mad": "mad_ds", "fano": "fano_ds", "cv2_resid": "cv2_resid_ds"}
         )
         per_patient = per_patient.merge(pp_ds, on=["gene", "patient", "compartment"], how="left")
+        ct_ds = _metrics_for_groups(norm_ds, by_ct, genes, grp["min_cells_per_celltype_group"], frac, ["patient", "cell_type"])
+        ct_ds = ct_ds[["gene", "patient", "cell_type", "mean", "cv"]].rename(columns={"mean": "mean_ds", "cv": "cv_ds"})
+        per_celltype = per_celltype.merge(ct_ds, on=["gene", "patient", "cell_type"], how="left")
         summary["downsampling"] = {"target_depth": int(target), "cells_above_target": int((adata.obs["n_counts"] > target).sum())}
         ok = per_patient[["cv", "cv_ds"]].dropna()
         summary["downsampling"]["spearman_cv_vs_cv_ds"] = float(sps.spearmanr(ok["cv"], ok["cv_ds"]).statistic) if len(ok) > 10 else np.nan
@@ -143,13 +230,17 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     else:
         for c in ("mean_ds", "cv_ds", "mad_ds", "fano_ds", "cv2_resid_ds"):
             per_patient[c] = np.nan
+        per_celltype["mean_ds"] = np.nan
+        per_celltype["cv_ds"] = np.nan
 
     for df in (per_patient, pooled, per_celltype):
         df["dataset"] = meta["id"]
         df["cancer_type"] = meta["cancer_type"]
     per_patient = per_patient[PATIENT_TABLE_COLUMNS]
     pooled = pooled[[c for c in PATIENT_TABLE_COLUMNS if c in pooled.columns]]
-    per_celltype = per_celltype[["dataset", "cancer_type", "patient", "cell_type", "gene", "n_cells", "mean", "detection_rate", "sd", "cv", "cv2", "mad", "fano", "cv2_resid"]]
+    per_celltype = per_celltype[
+        ["dataset", "cancer_type", "patient", "cell_type", "gene", "n_cells", "mean", "detection_rate", "sd", "cv", "cv2", "mad", "fano", "cv2_resid", "mean_ds", "cv_ds"]
+    ]
 
     # 5. DEPTH / DEPTH2 ---------------------------------------------------------------
     logX = log2p1(norm)
@@ -233,7 +324,17 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
         "median_delta_cv2_resid_expressed_genes": float(sig["delta_cv2_resid"].median()) if "delta_cv2_resid" in sig and len(sig) else np.nan,
     }
 
+    # 7. malignant vs non-malignant / single-lineage noise contrasts ------------------------
+    contrast_patient, contrast_summary = noise_contrasts(per_patient, per_celltype, met_p["min_detection_rate"], frac, grp["min_patients_per_test"])
+    for df in (contrast_patient, contrast_summary):
+        df.insert(0, "cancer_type", meta["cancer_type"])
+        df.insert(0, "dataset", meta["id"])
+    allref = contrast_summary[contrast_summary["reference"] == NON_MALIGNANT]
+    summary["contrast_vs_non_malignant"] = allref.drop(columns=["dataset", "cancer_type", "reference"]).iloc[0].to_dict() if len(allref) else {}
+
     # write ----------------------------------------------------------------------------
+    contrast_patient.to_parquet(out_dir / "noise_contrasts_patient.parquet", index=False, compression="zstd")
+    contrast_summary.to_parquet(out_dir / "noise_contrasts.parquet", index=False, compression="zstd")
     per_patient.to_parquet(out_dir / "gene_metrics_patient.parquet", index=False, compression="zstd")
     pooled.to_parquet(out_dir / "gene_metrics_pooled.parquet", index=False, compression="zstd")
     per_celltype.to_parquet(out_dir / "gene_metrics_celltype.parquet", index=False, compression="zstd")
@@ -263,6 +364,7 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
     app_dir.mkdir(parents=True, exist_ok=True)
     (app_dir / "patient").mkdir(exist_ok=True)
     summaries, gene_summaries, cell_scores, sample_scores, celltype_rows = [], [], [], [], []
+    contrasts, contrasts_patient = [], []
     for entry in registry["datasets"]:
         d = processed_dir / entry["id"]
         if not (d / "summary.json").exists():
@@ -282,6 +384,8 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
             if c != "n_cells":
                 pp[c] = pp[c].astype(np.float32)
         pp.to_parquet(app_dir / "patient" / f"{entry['id']}.parquet", index=False, compression="zstd")
+        contrasts.append(pd.read_parquet(d / "noise_contrasts.parquet"))
+        contrasts_patient.append(pd.read_parquet(d / "noise_contrasts_patient.parquet"))
         ct = pd.read_parquet(d / "gene_metrics_celltype.parquet")
         ct = ct[ct["gene"].isin(keep_genes)]
         ct_med = (
@@ -336,6 +440,9 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
                 "depth2_cell_p": s["depth"]["paired_test_depth2_cell_median"]["p_value"],
                 "depth_cell_median_diff": s["depth"]["paired_test_depth_cell_median"]["median_diff"],
                 "depth_cell_p": s["depth"]["paired_test_depth_cell_median"]["p_value"],
+                "log2fc_cv_ds_vs_non_malignant": s.get("contrast_vs_non_malignant", {}).get("median_log2fc_cv_ds"),
+                "excess_cv2_ds_vs_non_malignant": s.get("contrast_vs_non_malignant", {}).get("median_excess_cv2_ds"),
+                "excess_cv2_ds_p": s.get("contrast_vs_non_malignant", {}).get("p_excess_cv2_ds"),
                 "download_date": (manifest or {}).get(entry["id"], {}).get("download_date"),
                 "sha256": (manifest or {}).get(entry["id"], {}).get("sha256"),
                 "sctcna_version": s["sctcna_version"],
@@ -351,6 +458,8 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
     )
     pd.concat(sample_scores, ignore_index=True).to_parquet(app_dir / "sample_scores.parquet", index=False, compression="zstd")
     pd.concat(celltype_rows, ignore_index=True).to_parquet(app_dir / "celltype_summary.parquet", index=False, compression="zstd")
+    pd.concat(contrasts, ignore_index=True).to_parquet(app_dir / "noise_contrasts.parquet", index=False, compression="zstd")
+    pd.concat(contrasts_patient, ignore_index=True).to_parquet(app_dir / "noise_contrasts_patient.parquet", index=False, compression="zstd")
     with open(app_dir / "build.json", "w") as fh:
         json.dump({"sctcna_version": __version__, "datasets": [e["id"] for e, _ in summaries], "built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}, fh, indent=2)
     return {"datasets": len(summaries), "app_dir": str(app_dir)}

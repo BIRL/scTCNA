@@ -119,3 +119,21 @@ def paired_score_test(sample_scores: pd.DataFrame, score: str, treat: str = "mal
         rec["p_value"] = 1.0 if nz.size == 0 else float(sps.wilcoxon(nz, zero_method="wilcox").pvalue)
         rec["rank_biserial"] = rank_biserial(d)
     return rec
+
+
+def one_sample_wilcoxon(values, min_n: int = 5) -> dict:
+    """Wilcoxon signed-rank test of per-patient values against 0 (two-sided) with the rank-biserial effect size."""
+    v = np.asarray(values, dtype=float)
+    v = v[np.isfinite(v)]
+    rec = {
+        "n": int(v.size),
+        "median": float(np.median(v)) if v.size else np.nan,
+        "frac_positive": float((v > 0).mean()) if v.size else np.nan,
+        "p_value": np.nan,
+        "rank_biserial": np.nan,
+    }
+    if v.size >= min_n:
+        nz = v[v != 0]
+        rec["p_value"] = 1.0 if nz.size == 0 else float(sps.wilcoxon(nz, zero_method="wilcox").pvalue)
+        rec["rank_biserial"] = rank_biserial(v)
+    return rec

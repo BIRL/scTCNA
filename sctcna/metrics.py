@@ -125,3 +125,30 @@ def log2_fold_change(numerator, denominator) -> np.ndarray:
     ok = np.isfinite(a) & np.isfinite(b) & (a > 0) & (b > 0)
     out[ok] = np.log2(a[ok] / b[ok])
     return out
+
+
+def trend_excess(ref_mean, ref_cv2, query_mean, query_cv2, frac: float = 0.3, min_points: int = 50) -> np.ndarray:
+    """Excess noise of query genes over a reference group's mean-CV^2 trend.
+
+    A LOWESS curve of log10(CV^2) on log10(mean) is fitted across the genes of
+    the reference group; each query gene's residual is log10(CV^2_query) minus
+    the curve evaluated at the query gene's mean. Query means outside the
+    reference's fitted range give NaN (no extrapolation). Positive values mean
+    the query cells are noisier than reference cells at the same expression
+    level. scTCNA addition, used to compare malignant cells with non-malignant
+    cells (or one lineage) without the mean dependence of CV.
+    """
+    rm, rc = np.asarray(ref_mean, dtype=float), np.asarray(ref_cv2, dtype=float)
+    qm, qc = np.asarray(query_mean, dtype=float), np.asarray(query_cv2, dtype=float)
+    out = np.full(qm.shape, np.nan)
+    ok = np.isfinite(rm) & np.isfinite(rc) & (rm > 0) & (rc > 0)
+    if ok.sum() < min_points:
+        return out
+    x, y = np.log10(rm[ok]), np.log10(rc[ok])
+    fit = lowess(y, x, frac=frac, it=2, delta=0.01 * (x.max() - x.min()), return_sorted=True)
+    xs, ys = fit[:, 0], fit[:, 1]
+    q_ok = np.isfinite(qm) & np.isfinite(qc) & (qm > 0) & (qc > 0)
+    lx = np.log10(np.where(q_ok, qm, 1.0))
+    inside = q_ok & (lx >= xs[0]) & (lx <= xs[-1])
+    out[inside] = np.log10(qc[inside]) - np.interp(lx[inside], xs, ys)
+    return out

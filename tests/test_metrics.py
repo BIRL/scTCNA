@@ -162,3 +162,30 @@ def test_log2_fold_change_vectorised_shapes():
 
 def test_log2_fold_change_broadcasts_scalar_against_vector():
     np.testing.assert_allclose(log2_fold_change([2.0, 4.0], 1.0), [1.0, 2.0])
+
+
+def test_trend_excess_detects_extra_noise_at_matched_mean():
+    from sctcna.metrics import gene_noise_table, trend_excess
+
+    rng = np.random.default_rng(3)
+    n_cells, n_genes = 2000, 300
+    mu = rng.lognormal(0.0, 1.0, n_genes)
+    ref = rng.poisson(mu, size=(n_cells, n_genes))
+    same = rng.poisson(mu, size=(n_cells, n_genes))
+    noisy = rng.poisson(rng.gamma(shape=1.0, scale=mu, size=(n_cells, n_genes)))  # NB, theta = 1
+    t_ref, t_same, t_noisy = (gene_noise_table(sp.csr_matrix(x)) for x in (ref, same, noisy))
+    ex_same = trend_excess(t_ref["mean"], t_ref["cv2"], t_same["mean"], t_same["cv2"])
+    ex_noisy = trend_excess(t_ref["mean"], t_ref["cv2"], t_noisy["mean"], t_noisy["cv2"])
+    assert abs(np.nanmedian(ex_same)) < 0.03
+    assert np.nanmedian(ex_noisy) > 0.2
+
+
+def test_trend_excess_is_nan_outside_reference_range_and_with_too_few_genes():
+    from sctcna.metrics import trend_excess
+
+    ref_mean = np.linspace(1, 10, 100)
+    ref_cv2 = 1 / ref_mean
+    out = trend_excess(ref_mean, ref_cv2, np.array([0.01, 5.0, 1000.0, 0.0]), np.array([1.0, 0.2, 0.001, 1.0]))
+    assert np.isnan(out[0]) and np.isnan(out[2]) and np.isnan(out[3])
+    assert np.isfinite(out[1])
+    assert np.isnan(trend_excess(ref_mean[:10], ref_cv2[:10], ref_mean[:10], ref_cv2[:10])).all()

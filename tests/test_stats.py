@@ -135,3 +135,14 @@ def test_paired_score_test_shape_and_values():
     missing = paired_score_test(scores[scores["compartment"] == "malignant"], "depth2_pseudobulk")
     assert missing["n_pairs"] == 0
     assert np.isnan(missing["median_diff"]) and np.isnan(missing["p_value"]) and np.isnan(missing["rank_biserial"])
+
+
+def test_one_sample_wilcoxon():
+    from sctcna.stats import one_sample_wilcoxon
+
+    res = one_sample_wilcoxon([0.5, 1.0, 0.2, 0.3, 0.8, 0.1], min_n=5)
+    assert res["n"] == 6 and res["frac_positive"] == 1.0
+    assert res["p_value"] == pytest.approx(2 / 64)
+    assert res["rank_biserial"] == 1.0
+    few = one_sample_wilcoxon([1.0, np.nan, 2.0], min_n=5)
+    assert few["n"] == 2 and np.isnan(few["p_value"])
