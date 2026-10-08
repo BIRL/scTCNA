@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cross-cancer summary · scTCNA</title>
+  <meta name="description" content="Is transcriptional noise higher in malignant cells than in non-malignant cells of the same patients? Patient-level contrasts across ten cancer types (scTCNA).">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="loading" class="loading-bar" hidden></div>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="">scTCNA <span class="brand-sub">single-cell Cancer Noise Atlas</span></a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="index.html">Gene Noise Analysis</a>
+        <a href="summary.html" class="active">Cross-cancer summary</a>
+        <a href="top-genes.html">Top genes</a>
+        <a href="tumor.html">Tumor Heterogeneity</a>
+        <a href="heatmap.html">Heatmap</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
+
+    <h1 class="page-title">Cross-cancer summary</h1>
+    <p class="page-lead">Is transcriptional noise higher in malignant cells than in non-malignant cells of the same patients? For every patient, genes detected in at least 10% of cells of both groups are compared and the median over genes is taken; patients are then tested against zero with a Wilcoxon signed-rank test, so the patient is the unit of replication. Three measures are shown because they answer different questions: the raw CV ratio (TCNA Eq. 1), the same ratio after downsampling all cells to a common UMI depth, and the depth-matched <em>excess noise</em>, i.e. how far malignant genes lie above the reference cells' mean-CV² trend at the same expression level.</p>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Malignant versus all non-malignant cells</h2>
+        <div class="card-actions"><a id="csv-all" class="btn btn-outline" href="#">Download CSV</a></div>
+      </div>
+      <p class="card-sub">Bars are medians across patients. Positive values mean malignant cells are noisier. The non-malignant compartment pools several lineages, so the raw ratio also reflects differences in cell-type composition and sequencing depth.</p>
+      <div id="plot-all" class="plot plot-empty">Loading…</div>
+      <div id="table-all" class="table-wrap"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Malignant cells versus single non-malignant lineages</h2>
+      </div>
+      <p class="card-sub">Depth-matched excess noise of malignant cells over each lineage's mean-CV² trend (median across patients; lineages with at least 50 cells in at least 3 patients). Red: malignant noisier; blue: the lineage is noisier.</p>
+      <div id="plot-lineages" class="plot plot-empty">Loading…</div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Per patient</h2>
+        <div class="controls">
+          <div class="field"><label for="cancer">Cancer type</label><select id="cancer"></select></div>
+          <div class="field"><label for="measure">Measure</label><select id="measure"></select></div>
+        </div>
+      </div>
+      <p class="card-sub">Each dot is one patient; the reference group is on the x axis. Values above zero mean that patient's malignant cells are noisier than the reference.</p>
+      <div id="plot-patients" class="plot plot-empty">Loading…</div>
+      <div id="table-patients" class="table-wrap"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
+      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    </div>
+  </footer>
+
+  <script src="vendor/plotly.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/plots.js"></script>
+  <script src="js/summary.js"></script>
+</body>
+</html>
