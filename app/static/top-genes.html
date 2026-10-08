@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Top genes · scTCNA</title>
+  <meta name="description" content="Noisiest and most stable genes per cancer type by differential noise or per-compartment noise metric (scTCNA).">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="loading" class="loading-bar" hidden></div>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="">scTCNA <span class="brand-sub">single-cell Cancer Noise Atlas</span></a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="index.html">Gene Noise Analysis</a>
+        <a href="summary.html">Cross-cancer summary</a>
+        <a href="top-genes.html" class="active">Top genes</a>
+        <a href="tumor.html">Tumor Heterogeneity</a>
+        <a href="heatmap.html">Heatmap</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
+
+    <h1 class="page-title">Top genes</h1>
+    <p class="page-lead">Genes ranked within one cancer type by a noise metric: differential noise between compartments (log2 ratios, median over patients, with paired Wilcoxon q-values) or the noise of one compartment on its own. "Noisy" lists the largest values first, "stable" the smallest.</p>
+
+    <section class="card">
+      <form id="form" class="controls">
+        <div class="field"><label for="cancer">Cancer type</label><select id="cancer"></select></div>
+        <div class="field grow"><label for="metric">Metric</label><select id="metric"></select></div>
+        <div class="field">
+          <span class="label">Direction</span>
+          <div class="segmented" role="radiogroup" aria-label="Direction">
+            <input type="radio" name="direction" id="dir-noisy" value="noisy" checked><label for="dir-noisy">Noisy</label>
+            <input type="radio" name="direction" id="dir-stable" value="stable"><label for="dir-stable">Stable</label>
+          </div>
+        </div>
+        <div class="field"><label for="n">Genes (1-500)</label><input id="n" type="number" min="1" max="500" value="50"></div>
+        <label class="check"><input type="checkbox" id="expressed" checked> expressed genes only (detected in &ge; 10% of cells in both compartments)</label>
+        <button class="btn" type="submit">Show</button>
+        <a id="csv-link" class="btn secondary" href="#" download>Download CSV</a>
+      </form>
+    </section>
+
+    <section id="results" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="title"></h2>
+          <p class="card-sub" id="subtitle"></p>
+        </div>
+        <div class="legend-chips" id="chips"></div>
+        <div id="plot-top" class="plot tall"></div>
+        <p class="plot-note muted small" id="plot-note"></p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Table</h2><p class="card-sub">Click a column header to sort. Medians across patients; p and q from the paired Wilcoxon test on per-patient log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>).</p></div>
+        <div id="table"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
+      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods and references on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    </div>
+  </footer>
+
+  <script src="vendor/plotly.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/plots.js"></script>
+  <script src="js/top-genes.js"></script>
+</body>
+</html>

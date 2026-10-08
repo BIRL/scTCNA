@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gene Noise Analysis · scTCNA</title>
+  <meta name="description" content="Transcriptional noise of a gene in malignant versus non-malignant cells across cancer types (scTCNA, the single-cell Cancer Noise Atlas).">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="loading" class="loading-bar" hidden></div>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="">scTCNA <span class="brand-sub">single-cell Cancer Noise Atlas</span></a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="index.html" class="active">Gene Noise Analysis</a>
+        <a href="summary.html">Cross-cancer summary</a>
+        <a href="top-genes.html">Top genes</a>
+        <a href="tumor.html">Tumor Heterogeneity</a>
+        <a href="heatmap.html">Heatmap</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
+
+    <h1 class="page-title">Gene Noise Analysis</h1>
+    <p class="page-lead">Transcriptional noise of a gene in <strong>Malignant</strong> versus <strong>Non-malignant</strong> cells of the same patients. Values are medians across patients of per-patient metrics on CP10K-normalised counts; differential noise is log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>) per patient (TCNA Eq. 1), tested with a paired Wilcoxon signed-rank test.</p>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Query</h2>
+        <div class="segmented" role="radiogroup" aria-label="Analysis mode">
+          <input type="radio" name="mode" id="mode-pan" value="pan" checked><label for="mode-pan">Pan-cancer: one gene</label>
+          <input type="radio" name="mode" id="mode-cancer" value="cancer"><label for="mode-cancer">Cancer-specific: gene list</label>
+        </div>
+      </div>
+      <form id="pan-form" class="controls">
+        <div class="field grow">
+          <label for="gene-input">Gene symbol</label>
+          <div class="autocomplete"><input id="gene-input" type="text" placeholder="start typing a gene symbol" required></div>
+        </div>
+        <button class="btn" type="submit">Analyse</button>
+      </form>
+      <form id="cancer-form" class="controls" hidden>
+        <div class="field">
+          <label for="cancer-select">Cancer type</label>
+          <select id="cancer-select"></select>
+        </div>
+        <div class="field grow">
+          <label for="gene-add">Add a gene</label>
+          <div class="autocomplete"><input id="gene-add" type="text" placeholder="search and pick to add to the list"></div>
+        </div>
+        <div class="field wide">
+          <label for="genes-text">Gene list (up to 50 symbols, separated by commas, spaces or new lines)</label>
+          <textarea id="genes-text" spellcheck="false"></textarea>
+        </div>
+        <button class="btn" type="submit">Analyse</button>
+      </form>
+    </section>
+
+    <section id="pan-results" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="pan-title"></h2>
+          <p class="card-sub">Each bar is the median across patients; error bars on the mean are the SD across cells.</p>
+        </div>
+        <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
+        <div class="grid-2">
+          <div class="plot-box"><h3>Mean &plusmn; SD (CP10K)</h3><div id="plot-mean" class="plot"></div></div>
+          <div class="plot-box"><h3>CV = SD / mean</h3><div id="plot-cv" class="plot"></div></div>
+          <div class="plot-box"><h3>MAD (mean absolute deviation)</h3><div id="plot-mad" class="plot"></div></div>
+          <div class="plot-box"><h3>Fano = variance / mean</h3><div id="plot-fano" class="plot"></div></div>
+          <div class="plot-box"><h3>Mean-corrected CV&sup2; (LOWESS residual)</h3><div id="plot-cv2resid" class="plot"></div></div>
+          <div class="plot-box">
+            <h3>Differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</h3>
+            <p class="plot-note">Median over patients; <span class="chip chip-sig">q &lt; 0.05</span> <span class="chip chip-ns">not significant</span>; n = paired patients. Click a bar to open the per-patient detail.</p>
+            <div id="plot-diff" class="plot"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Summary table</h2>
+          <div class="card-actions"><button id="pan-download" class="btn secondary small" type="button">Download CSV</button></div>
+        </div>
+        <div id="pan-table"></div>
+      </div>
+
+      <div class="card" id="detail-card">
+        <div class="card-head">
+          <h2>Per-patient and per-cell-type detail</h2>
+          <div class="card-actions"><a id="detail-csv" class="btn secondary small" href="#" download>Download per-patient CSV</a></div>
+        </div>
+        <div class="controls" style="margin-bottom: 12px;">
+          <div class="field"><label for="detail-cancer">Cancer type</label><select id="detail-cancer"></select></div>
+          <div class="field"><label for="detail-metric">Metric</label>
+            <select id="detail-metric">
+              <option value="cv">CV = SD / mean</option>
+              <option value="mad">MAD</option>
+              <option value="fano">Fano</option>
+              <option value="cv2_resid">Mean-corrected CV&sup2; (LOWESS residual)</option>
+              <option value="mean">Mean (CP10K)</option>
+              <option value="detection_rate">Detection rate</option>
+            </select>
+          </div>
+          <label class="check"><input type="checkbox" id="detail-ds"> overlay values after depth downsampling</label>
+        </div>
+        <div class="grid-2">
+          <div class="plot-box">
+            <h3 id="paired-title">Paired per-patient values</h3>
+            <p class="plot-note">One line per patient joining its Malignant and Non-malignant value; wide dashes are the medians.</p>
+            <div id="plot-paired" class="plot"></div>
+            <p id="paired-stats" class="stat-line"></p>
+          </div>
+          <div class="plot-box">
+            <h3 id="celltype-title">By cell type</h3>
+            <p class="plot-note">Median across patients within each annotated lineage (patient x cell-type groups with at least 50 cells).</p>
+            <div id="plot-celltypes" class="plot"></div>
+          </div>
+        </div>
+        <h3>Per-patient values</h3>
+        <div id="patients-table"></div>
+        <h3 style="margin-top: 16px;">Per cell type</h3>
+        <div id="celltypes-table"></div>
+      </div>
+    </section>
+
+    <section id="cancer-results" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="cs-title"></h2>
+          <p class="card-sub">Medians across patients; error bars on the mean are the SD across cells.</p>
+        </div>
+        <div id="cs-missing" class="notice" hidden></div>
+        <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
+        <div class="grid-2">
+          <div class="plot-box"><h3>Mean &plusmn; SD (CP10K)</h3><div id="plot-cs-mean" class="plot"></div></div>
+          <div class="plot-box"><h3>CV = SD / mean</h3><div id="plot-cs-cv" class="plot"></div></div>
+          <div class="plot-box"><h3>MAD (mean absolute deviation)</h3><div id="plot-cs-mad" class="plot"></div></div>
+          <div class="plot-box"><h3>Fano = variance / mean</h3><div id="plot-cs-fano" class="plot"></div></div>
+          <div class="plot-box"><h3>Mean-corrected CV&sup2; (LOWESS residual)</h3><div id="plot-cs-cv2resid" class="plot"></div></div>
+          <div class="plot-box">
+            <h3>Differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</h3>
+            <p class="plot-note"><span class="chip chip-sig">q &lt; 0.05</span> <span class="chip chip-ns">not significant</span></p>
+            <div id="plot-cs-diff" class="plot"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Summary table</h2>
+          <div class="card-actions"><button id="cs-download" class="btn secondary small" type="button">Download CSV</button></div>
+        </div>
+        <div id="cs-table"></div>
+      </div>
+    </section>
+
+    <section class="card" id="sample-counts">
+      <div class="card-head">
+        <h2>Sample counts</h2>
+        <p class="card-sub">Cells and patients per compartment in each cancer type after quality control.</p>
+      </div>
+      <div class="grid-2">
+        <div class="plot-box"><h3>Cells</h3><div id="plot-cells" class="plot"></div></div>
+        <div class="plot-box"><h3>Patients</h3><div id="plot-patients" class="plot"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
+      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods and references on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    </div>
+  </footer>
+
+  <script src="vendor/plotly.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/plots.js"></script>
+  <script src="js/gene.js"></script>
+</body>
+</html>

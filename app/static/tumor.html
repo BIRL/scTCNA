@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tumor Heterogeneity · scTCNA</title>
+  <meta name="description" content="DEPTH and DEPTH2 tumour-heterogeneity scores per cell and per pseudo-bulk profile, malignant versus non-malignant cells (scTCNA).">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="loading" class="loading-bar" hidden></div>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="">scTCNA <span class="brand-sub">single-cell Cancer Noise Atlas</span></a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="index.html">Gene Noise Analysis</a>
+        <a href="summary.html">Cross-cancer summary</a>
+        <a href="top-genes.html">Top genes</a>
+        <a href="tumor.html" class="active">Tumor Heterogeneity</a>
+        <a href="heatmap.html">Heatmap</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
+
+    <h1 class="page-title">Tumor Heterogeneity</h1>
+    <p class="page-lead">DEPTH2 and DEPTH scores on log2-transformed expression, as in TCNA. At the <strong>cell</strong> level every cell is a sample (genes z-scored across all cells of the dataset); at the <strong>sample</strong> level each patient x compartment pseudo-bulk profile is a sample. Compartments are compared with a paired Wilcoxon test across patients.</p>
+
+    <section class="card">
+      <form id="form" class="controls">
+        <div class="field"><label for="cancer">Cancer type</label><select id="cancer"></select></div>
+        <div class="field">
+          <span class="label">Score</span>
+          <div class="segmented" role="radiogroup" aria-label="Score">
+            <input type="radio" name="score" id="score-depth2" value="depth2" checked><label for="score-depth2">DEPTH2</label>
+            <input type="radio" name="score" id="score-depth" value="depth"><label for="score-depth">DEPTH</label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="label">Level</span>
+          <div class="segmented" role="radiogroup" aria-label="Level">
+            <input type="radio" name="level" id="level-cell" value="cell" checked><label for="level-cell">Cell</label>
+            <input type="radio" name="level" id="level-sample" value="sample"><label for="level-sample">Sample (pseudo-bulk)</label>
+          </div>
+        </div>
+        <button class="btn" type="submit">Show</button>
+        <a id="csv-samples" class="btn secondary" href="#" download>Download per-patient CSV</a>
+        <a id="csv-cells" class="btn secondary" href="#" download>Download per-cell CSV</a>
+      </form>
+    </section>
+
+    <section id="results" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="title"></h2>
+          <p class="card-sub" id="subtitle"></p>
+        </div>
+        <div id="note" class="notice" hidden></div>
+        <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
+        <div id="plot-main" class="plot tall"></div>
+        <p id="stats" class="stat-line"></p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2 id="table-title">Per patient</h2></div>
+        <div id="table"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Across cancer types</h2>
+        <p class="card-sub">Per-patient medians of the per-cell DEPTH2 (median across patients per compartment) and the paired tests of every dataset.</p>
+      </div>
+      <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
+      <div id="plot-summary" class="plot"></div>
+      <div id="summary-table"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
+      <p>DEPTH: Li M et al., Commun Biol 2020. DEPTH2: Song D, Wang X, J Transl Med 2022. Full methods on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    </div>
+  </footer>
+
+  <script src="vendor/plotly.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/plots.js"></script>
+  <script src="js/tumor.js"></script>
+</body>
+</html>

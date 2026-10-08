@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Heatmap · scTCNA</title>
+  <meta name="description" content="Cross-cancer heatmap of a noise metric for a list of genes (scTCNA).">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="loading" class="loading-bar" hidden></div>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="index.html"><img src="favicon.svg" alt="">scTCNA <span class="brand-sub">single-cell Cancer Noise Atlas</span></a>
+      <nav class="site-nav" aria-label="Main">
+        <a href="index.html">Gene Noise Analysis</a>
+        <a href="summary.html">Cross-cancer summary</a>
+        <a href="top-genes.html">Top genes</a>
+        <a href="tumor.html">Tumor Heterogeneity</a>
+        <a href="heatmap.html" class="active">Heatmap</a>
+        <a href="about.html">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
+
+    <h1 class="page-title">Heatmap</h1>
+    <p class="page-lead">One noise metric for a list of genes across all cancer types. Cells are blank where a gene is absent from a dataset. Values are not batch-corrected across studies; the row z-score option rescales each gene over the cancer types it is measured in.</p>
+
+    <section class="card">
+      <form id="form" class="controls">
+        <div class="field wide">
+          <label for="genes">Gene list (up to 200 symbols, separated by commas, spaces or new lines)</label>
+          <textarea id="genes" spellcheck="false" placeholder="e.g. TP53 MYC EGFR"></textarea>
+        </div>
+        <div class="field grow"><label for="metric">Metric</label><select id="metric"></select></div>
+        <label class="check"><input type="checkbox" id="zscore"> z-score rows</label>
+        <label class="check"><input type="checkbox" id="expressed"> expressed genes only</label>
+        <button class="btn" type="submit">Draw heatmap</button>
+        <button class="btn secondary" type="button" id="example">Fill with top noisy genes</button>
+        <a id="csv-link" class="btn secondary" href="#" download hidden>Download CSV</a>
+      </form>
+    </section>
+
+    <section id="results" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2 id="title"></h2>
+          <p class="card-sub" id="subtitle"></p>
+        </div>
+        <div id="missing" class="notice" hidden></div>
+        <div id="plot-heatmap" class="plot"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Values</h2><p class="card-sub">Rows are genes, columns cancer types; the CSV also holds the q-values when the metric has a paired test.</p></div>
+        <div id="table"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
+      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods and references on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    </div>
+  </footer>
+
+  <script src="vendor/plotly.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/plots.js"></script>
+  <script src="js/heatmap.js"></script>
+</body>
+</html>
