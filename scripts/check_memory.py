@@ -54,7 +54,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     port = _free_port()
-    env = {**os.environ, "SCTCNA_DATA_DIR": str(Path(args.data).resolve())}
+    env = {**os.environ, "SCTCNA_DATA_DIR": str(Path(args.data).resolve()), "ARROW_DEFAULT_MEMORY_POOL": "system"}  # as in the Dockerfile
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port)], cwd=ROOT, env=env)
     base = f"http://127.0.0.1:{port}"
     for _ in range(300):

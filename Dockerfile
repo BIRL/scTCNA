@@ -26,7 +26,9 @@ COPY --chown=user:user configs/ ./configs/
 # to git for Spaces builds); see docs/DEPLOY.md.
 COPY --chown=user:user data/app/ ./data/app/
 
+# The system allocator returns freed Arrow buffers to the OS, which keeps resident memory low
 ENV SCTCNA_DATA_DIR=/app/data/app \
+    ARROW_DEFAULT_MEMORY_POOL=system \
     PORT=7860 \
     PYTHONPATH=/app \
     HOME=/home/user

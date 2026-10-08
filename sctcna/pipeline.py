@@ -381,6 +381,9 @@ def _json_default(o):
     return str(o)
 
 
+APP_MIN_DETECTION = 0.01
+
+
 def _compact(df: pd.DataFrame, categorical: list[str], float_columns: list[str] | None = None) -> pd.DataFrame:
     """Shrink an app table: repeated strings become categoricals and display-only floats float32.
 
@@ -499,7 +502,15 @@ def aggregate(processed_dir: str | Path, app_dir: str | Path, registry: dict, ma
         )
     datasets = pd.DataFrame(rows)
     datasets.to_parquet(app_dir / "datasets.parquet", index=False)
-    pd.concat(gene_summaries, ignore_index=True).to_parquet(app_dir / "gene_summary.parquet", index=False, compression="zstd")
+    # app copy: genes detected in >= APP_MIN_DETECTION of cells (median over patients) in at least one compartment,
+    # float32 display values and categorical labels, so the served tables fit a 512 MB instance; the full
+    # per-dataset tables stay in data/processed/<dataset>/gene_summary.parquet
+    gs_all = pd.concat(gene_summaries, ignore_index=True)
+    detected = gs_all[["detection_rate_malignant", "detection_rate_non_malignant"]].max(axis=1) >= APP_MIN_DETECTION
+    gs_app = gs_all[detected | gs_all["expressed"].fillna(False).astype(bool)].reset_index(drop=True)
+    stat_columns = [c for c in gs_app.columns if c.startswith(("p_value", "q_value"))]
+    float_columns = [c for c in gs_app.select_dtypes("float").columns if c not in stat_columns]
+    _compact(gs_app, ["dataset", "cancer_type"], float_columns).to_parquet(app_dir / "gene_summary.parquet", index=False, compression="zstd")
     cs = _compact(pd.concat(cell_scores, ignore_index=True), ["dataset", "cancer_type", "patient", "cell_type", "compartment"], ["n_counts", "pct_mito", "depth", "depth2"])
     cs[["dataset", "cancer_type", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "depth", "depth2"]].to_parquet(
         app_dir / "cell_scores.parquet", index=False, compression="zstd"

@@ -138,7 +138,7 @@ def noise_contrasts_patients(store: StoreDep, cancer_type: str) -> Response:
 
 
 # ---------------------------------------------------------------------------- downloads
-def _csv_chunks(df: pd.DataFrame, rows_per_chunk: int = 50_000) -> Iterator[str]:
+def _csv_chunks(df: pd.DataFrame, rows_per_chunk: int = 5_000) -> Iterator[str]:
     yield df.iloc[:0].to_csv(index=False)
     for start in range(0, len(df), rows_per_chunk):
         yield df.iloc[start : start + rows_per_chunk].to_csv(index=False, header=False)

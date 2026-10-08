@@ -25,6 +25,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 
 MALIGNANT = "malignant"
 NON_MALIGNANT = "non_malignant"
@@ -59,7 +60,8 @@ DIRECTIONS = ("noisy", "stable")
 SCORES = ("depth2", "depth")
 LEVELS = ("cell", "sample")
 MAX_HEATMAP_GENES = 200
-MAX_PATIENT_TABLES = 3
+MAX_PATIENT_TABLES = 1  # each per-patient table is tens of MB; one stays in memory
+CELLTYPE_KEY_STRIDE = 1_000_000
 MAX_CACHE_ENTRIES = 64
 REQUIRED_GENE_SUMMARY_COLUMNS = ["q_value", "q_value_mad", "q_value_fano", "q_value_cv2_resid", "delta_cv2_resid", "expressed"]
 MAX_CELL_VALUES = 5000
@@ -122,6 +124,14 @@ class BadRequest(StoreError):
     status_code = 400
 
 
+def _read(path: Path) -> pd.DataFrame:
+    """Read a Parquet table without keeping a second (Arrow) copy alive: single-threaded, columns released as converted."""
+    table = pq.read_table(path, use_threads=False)
+    df = table.to_pandas(self_destruct=True, split_blocks=True)
+    del table
+    return df
+
+
 def _records(df: pd.DataFrame) -> list[dict[str, Any]]:
     df = df.copy()
     for c in df.columns:
@@ -156,11 +166,11 @@ class Store:
         self.data_dir = Path(data_dir)
         if not (self.data_dir / "datasets.parquet").exists():
             raise FileNotFoundError(f"no app tables found in {self.data_dir.name}/ (run `python -m sctcna aggregate` first)")
-        self.datasets = pd.read_parquet(self.data_dir / "datasets.parquet")
-        self.gene_summary = pd.read_parquet(self.data_dir / "gene_summary.parquet")
-        self.cell_scores = pd.read_parquet(self.data_dir / "cell_scores.parquet")
-        self.sample_scores = pd.read_parquet(self.data_dir / "sample_scores.parquet")
-        self.celltype_summary = pd.read_parquet(self.data_dir / "celltype_summary.parquet")
+        self.datasets = _read(self.data_dir / "datasets.parquet")
+        self.gene_summary = _read(self.data_dir / "gene_summary.parquet")
+        self.cell_scores = _read(self.data_dir / "cell_scores.parquet")
+        self.sample_scores = _read(self.data_dir / "sample_scores.parquet")
+        self.celltype_summary = _read(self.data_dir / "celltype_summary.parquet")
         missing = sorted(set(REQUIRED_GENE_SUMMARY_COLUMNS) - set(self.gene_summary.columns))
         if missing:
             raise ValueError(f"app tables in {self.data_dir.name}/ are from an older build (gene_summary lacks {', '.join(missing)}); re-run `python -m sctcna aggregate`")
@@ -184,10 +194,15 @@ class Store:
         self._summary_idx_by_cancer = {str(ct): idx for ct, idx in self.gene_summary.groupby("cancer_type", observed=True).indices.items()}
         self._cells_idx_by_cancer = {str(ct): idx for ct, idx in self.cell_scores.groupby("cancer_type", observed=True).indices.items()}
         self._samples_by_cancer = {str(ct): df.reset_index(drop=True) for ct, df in self.sample_scores.groupby("cancer_type", observed=True)}
-        ct_key = self.celltype_summary["cancer_type"].astype(str) + "\t" + self.celltype_summary["gene"].astype(str)
-        order = np.argsort(ct_key.to_numpy(dtype=object), kind="stable")
+        # cell-type rows sorted by an integer (cancer type, gene) key, looked up with a binary search
+        ct_codes, ct_uniques = pd.factorize(self.celltype_summary["cancer_type"].astype(str))
+        gene_codes, gene_uniques = pd.factorize(self.celltype_summary["gene"].astype(str))
+        self._celltype_cancer_code = {str(c): i for i, c in enumerate(ct_uniques)}
+        self._celltype_gene_code = {str(g): i for i, g in enumerate(gene_uniques)}
+        keys = ct_codes.astype(np.int64) * CELLTYPE_KEY_STRIDE + gene_codes.astype(np.int64)
+        order = np.argsort(keys, kind="stable")
         self.celltype_summary = self.celltype_summary.iloc[order].reset_index(drop=True)
-        self._celltype_keys = ct_key.to_numpy(dtype=object)[order]
+        self._celltype_keys = keys[order]
 
         tests_path = self.data_dir / "heterogeneity_tests.parquet"
         tests = pd.read_parquet(tests_path) if tests_path.exists() else pd.DataFrame(columns=["cancer_type", "score", "level"])
@@ -241,7 +256,7 @@ class Store:
         if cached is not None:
             return cached
         path = self.data_dir / "patient" / f"{dataset}.parquet"
-        df = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=["gene", *PATIENT_ROW_COLUMNS])
+        df = _read(path) if path.exists() else pd.DataFrame(columns=["gene", *PATIENT_ROW_COLUMNS])
         entry = (df, {str(g): idx for g, idx in df.groupby("gene", observed=True).indices.items()})
         with self._lock:
             while len(self._patient_tables) >= MAX_PATIENT_TABLES:
@@ -311,7 +326,10 @@ class Store:
     def gene_celltypes(self, gene: str, cancer_type: str) -> dict[str, Any]:
         symbol = self.gene_symbol(gene)
         self.cancer(cancer_type)
-        key = f"{cancer_type}\t{symbol}"
+        c_code, g_code = self._celltype_cancer_code.get(cancer_type), self._celltype_gene_code.get(symbol)
+        if c_code is None or g_code is None:
+            raise NotFound(f"no cell-type values for {symbol} in {cancer_type}")
+        key = c_code * CELLTYPE_KEY_STRIDE + g_code
         lo = int(np.searchsorted(self._celltype_keys, key, side="left"))
         hi = int(np.searchsorted(self._celltype_keys, key, side="right"))
         if hi <= lo:
