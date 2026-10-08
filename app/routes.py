@@ -61,11 +61,12 @@ StoreDep = Annotated[Store, Depends(get_store)]
 
 
 # ---------------------------------------------------------------------------- overview
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 def health(request: Request) -> Response:
+    """200 with build info when the tables are loaded; 503 otherwise, so a host's health check fails a deploy without data."""
     store = request.app.state.store
     if store is None:
-        return json_response({"status": "no-data", "n_datasets": 0, "n_genes": 0, "build": None, "detail": request.app.state.data_error})
+        return json_response({"status": "no-data", "n_datasets": 0, "n_genes": 0, "build": None, "detail": request.app.state.data_error}, status_code=503)
     return json_response({"status": "ok", **store.health()})
 
 
@@ -175,7 +176,7 @@ def download(
     if table == "sample_scores":
         return csv_response(store.sample_scores_frame(cancer_type), f"sample_scores{suffix}.csv")
     if table == "noise_contrasts":
-        return csv_response(pd.DataFrame(store.contrast_summary(cancer_type)["rows"]), f"noise_contrasts{suffix}.csv")
+        return csv_response(store.contrast_frame(cancer_type), f"noise_contrasts{suffix}.csv")
     if table == "cell_scores":
         _require(cancer_type, "cancer_type", table)
         return csv_response(store.cell_scores_frame(cancer_type), f"cell_scores{suffix}.csv")

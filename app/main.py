@@ -42,7 +42,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     try:
         app.state.store = Store(data_dir)
         log.info("loaded app tables from %s (%d datasets)", data_dir, app.state.store.health()["n_datasets"])
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         app.state.data_error = f"app data not available: {exc}"
         log.warning("%s; the API will answer 503 until the tables exist and the server is restarted", app.state.data_error)
 

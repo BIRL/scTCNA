@@ -427,8 +427,9 @@ def test_download_unknown_table(client):
 # ------------------------------------------------------------------ missing data directory
 def test_missing_data_dir_gives_503(tmp_path):
     client = TestClient(create_app(tmp_path / "does-not-exist"))
-    health = body(client.get("/api/health"))
+    health = body(client.get("/api/health"), status=503)  # a host health check must fail without tables
     assert health["status"] == "no-data" and health["n_datasets"] == 0 and health["build"] is None
+    assert "does-not-exist" in health["detail"] and str(tmp_path) not in health["detail"]  # no absolute paths leak
     for path in ("/api/cancer-types", "/api/datasets", "/api/genes/OD30", "/api/heatmap?genes=OD30&metric=cv_malignant", "/api/download/datasets.csv"):
         r = client.get(path)
         assert r.status_code == 503, path
@@ -477,3 +478,30 @@ def test_heterogeneity_tests_are_precomputed(client):
     assert ("SYN", "depth2", "cell") in store._heterogeneity_tests
     data = body(client.get("/api/cancer-types/SYN/tumor-heterogeneity", params={"score": "depth2", "level": "cell"}))
     assert data["paired_test"]["n_pairs"] == 6
+
+
+def test_health_answers_head_requests(client):
+    r = client.head("/api/health")
+    assert r.status_code == 200 and r.text == ""
+
+
+def test_stale_tables_are_reported_not_crashing(app_data_dir, tmp_path):
+    import shutil
+
+    import pandas as pd
+
+    stale = tmp_path / "stale"
+    shutil.copytree(app_data_dir, stale)
+    gs = pd.read_parquet(stale / "gene_summary.parquet").drop(columns=["q_value_cv2_resid"])
+    gs.to_parquet(stale / "gene_summary.parquet")
+    c = TestClient(create_app(stale))
+    health = body(c.get("/api/health"), status=503)
+    assert "q_value_cv2_resid" in health["detail"]
+    assert c.get("/api/cancer-types").status_code == 503
+
+
+def test_empty_noise_contrast_csv_keeps_header(client):
+    store = client.app.state.store
+    assert store.contrast_frame("SYN").columns[0] == "dataset"
+    empty = store.noise_contrasts.iloc[:0]
+    assert list(empty.sort_values(["cancer_type", "reference"]).to_csv(index=False).splitlines())[0].startswith("dataset,cancer_type,reference")

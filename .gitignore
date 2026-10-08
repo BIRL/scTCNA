@@ -8,11 +8,8 @@ __pycache__/
 build/
 dist/
 
-# Data (raw downloads are large; processed outputs are reproducible)
-data/raw/
-data/interim/
-data/processed*/
-data/app_syn/
+# Data: only the aggregated app tables are versioned (raw downloads are large; everything else is reproducible)
+data/*
 !data/app/
 *.h5ad
 *.mtx

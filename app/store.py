@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from bisect import bisect_left
 from collections.abc import Callable
 from pathlib import Path
@@ -59,6 +60,8 @@ SCORES = ("depth2", "depth")
 LEVELS = ("cell", "sample")
 MAX_HEATMAP_GENES = 200
 MAX_PATIENT_TABLES = 3
+MAX_CACHE_ENTRIES = 64
+REQUIRED_GENE_SUMMARY_COLUMNS = ["q_value", "q_value_mad", "q_value_fano", "q_value_cv2_resid", "delta_cv2_resid", "expressed"]
 MAX_CELL_VALUES = 5000
 SIGNIFICANCE = 0.05
 
@@ -152,12 +155,15 @@ class Store:
     def __init__(self, data_dir: str | Path):
         self.data_dir = Path(data_dir)
         if not (self.data_dir / "datasets.parquet").exists():
-            raise FileNotFoundError(f"no app tables found in {self.data_dir} (run `python -m sctcna aggregate` first)")
+            raise FileNotFoundError(f"no app tables found in {self.data_dir.name}/ (run `python -m sctcna aggregate` first)")
         self.datasets = pd.read_parquet(self.data_dir / "datasets.parquet")
         self.gene_summary = pd.read_parquet(self.data_dir / "gene_summary.parquet")
         self.cell_scores = pd.read_parquet(self.data_dir / "cell_scores.parquet")
         self.sample_scores = pd.read_parquet(self.data_dir / "sample_scores.parquet")
         self.celltype_summary = pd.read_parquet(self.data_dir / "celltype_summary.parquet")
+        missing = sorted(set(REQUIRED_GENE_SUMMARY_COLUMNS) - set(self.gene_summary.columns))
+        if missing:
+            raise ValueError(f"app tables in {self.data_dir.name}/ are from an older build (gene_summary lacks {', '.join(missing)}); re-run `python -m sctcna aggregate`")
         build_path = self.data_dir / "build.json"
         self.build = json.load(open(build_path)) if build_path.exists() else {}
 
@@ -195,15 +201,24 @@ class Store:
 
         self._patient_tables: dict[str, tuple[pd.DataFrame, dict[str, np.ndarray]]] = {}
         self._cache: dict[tuple, Any] = {}
+        self._lock = threading.Lock()
 
     # ------------------------------------------------------------------ helpers
-    def _memo(self, key: tuple, compute: Callable[[], Any], max_entries: int = 512) -> Any:
-        """Memoise ``compute()`` under ``key``; the oldest entry goes when the cache is full."""
-        if key not in self._cache:
-            if len(self._cache) >= max_entries:
-                del self._cache[next(iter(self._cache))]
-            self._cache[key] = compute()
-        return self._cache[key]
+    def _memo(self, key: tuple, compute: Callable[[], Any], max_entries: int = MAX_CACHE_ENTRIES) -> Any:
+        """Memoise ``compute()`` under ``key``; the oldest entry goes when the cache is full.
+
+        Only small results are memoised (heterogeneity views, heatmaps of <= 200 genes), so the
+        cache stays a few megabytes; a lock keeps it consistent under uvicorn's thread pool.
+        """
+        with self._lock:
+            if key in self._cache:
+                return self._cache[key]
+        value = compute()
+        with self._lock:
+            while len(self._cache) >= max_entries:
+                self._cache.pop(next(iter(self._cache)), None)
+            self._cache[key] = value
+        return value
 
     def cancer(self, cancer_type: str) -> dict[str, Any]:
         """Dataset row of a cancer type."""
@@ -221,13 +236,18 @@ class Store:
 
     def _patient_table(self, dataset: str) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
         """Per-patient table of one dataset, read on first use; at most MAX_PATIENT_TABLES stay in memory."""
-        if dataset not in self._patient_tables:
-            path = self.data_dir / "patient" / f"{dataset}.parquet"
-            df = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=["gene", *PATIENT_ROW_COLUMNS])
-            if len(self._patient_tables) >= MAX_PATIENT_TABLES:
-                del self._patient_tables[next(iter(self._patient_tables))]
-            self._patient_tables[dataset] = (df, {str(g): idx for g, idx in df.groupby("gene", observed=True).indices.items()})
-        return self._patient_tables[dataset]
+        with self._lock:
+            cached = self._patient_tables.get(dataset)
+        if cached is not None:
+            return cached
+        path = self.data_dir / "patient" / f"{dataset}.parquet"
+        df = pd.read_parquet(path) if path.exists() else pd.DataFrame(columns=["gene", *PATIENT_ROW_COLUMNS])
+        entry = (df, {str(g): idx for g, idx in df.groupby("gene", observed=True).indices.items()})
+        with self._lock:
+            while len(self._patient_tables) >= MAX_PATIENT_TABLES:
+                self._patient_tables.pop(next(iter(self._patient_tables)), None)
+            self._patient_tables[dataset] = entry
+        return entry
 
     def _cancer_summary(self, cancer_type: str, expressed_only: bool) -> pd.DataFrame:
         self.cancer(cancer_type)
@@ -318,7 +338,7 @@ class Store:
         if metric not in COMPARISON_METRICS:
             raise BadRequest(f"unknown metric: {metric}; expected one of {', '.join(COMPARISON_METRICS)}")
         self.cancer(cancer_type)
-        return self._memo(("comparison", cancer_type, metric, expressed_only), lambda: self._comparison(cancer_type, metric, expressed_only))
+        return self._comparison(cancer_type, metric, expressed_only)  # not memoised: results are large and cheap to rebuild
 
     def _comparison(self, cancer_type: str, metric: str, expressed_only: bool) -> dict[str, Any]:
         fc_column, q_column = COMPARISON_METRICS[metric]
@@ -361,20 +381,17 @@ class Store:
                 genes.append(token)
         return genes
 
-    def _pivot(self, metric: str, expressed_only: bool) -> tuple[pd.DataFrame, pd.DataFrame | None]:
-        """Gene x cancer-type matrices of a metric and of its q-value (None when the metric has no test)."""
-
-        def build():
-            df = self.gene_summary
-            if expressed_only:
-                df = df[df["expressed"].fillna(False).to_numpy(dtype=bool)]
-            df = df.drop_duplicates(["gene", "cancer_type"])
-            values = df.pivot(index="gene", columns="cancer_type", values=metric).reindex(columns=self.cancer_types)
-            q_column = RANK_METRICS[metric]
-            q_values = df.pivot(index="gene", columns="cancer_type", values=q_column).reindex(columns=self.cancer_types) if q_column else None
-            return values, q_values
-
-        return self._memo(("pivot", metric, expressed_only), build)
+    def _pivot(self, genes: list[str], metric: str, expressed_only: bool) -> tuple[pd.DataFrame, pd.DataFrame | None]:
+        """Gene x cancer-type matrices of a metric and of its q-value (None when the metric has no test), for ``genes`` only."""
+        idx = np.concatenate([self._summary_by_gene[g] for g in genes if g in self._summary_by_gene]) if genes else np.array([], dtype=int)
+        df = self.gene_summary.iloc[np.sort(idx)]
+        if expressed_only:
+            df = df[df["expressed"].fillna(False).to_numpy(dtype=bool)]
+        df = df.drop_duplicates(["gene", "cancer_type"])
+        values = df.pivot(index="gene", columns="cancer_type", values=metric).reindex(index=genes, columns=self.cancer_types)
+        q_column = RANK_METRICS[metric]
+        q_values = df.pivot(index="gene", columns="cancer_type", values=q_column).reindex(index=genes, columns=self.cancer_types) if q_column else None
+        return values, q_values
 
     def heatmap(self, genes: str, metric: str, expressed_only: bool = False) -> dict[str, Any]:
         self._check_rank_metric(metric)
@@ -391,14 +408,14 @@ class Store:
             raise BadRequest("none of the requested genes is present in any dataset")
 
         def build():
-            values, q_values = self._pivot(metric, expressed_only)
+            values, q_values = self._pivot(found, metric, expressed_only)
             return {
                 "metric": metric,
                 "genes": found,
                 "missing": missing,
                 "cancer_types": self.cancer_types,
-                "values": values.reindex(found).to_numpy(dtype=float).tolist(),
-                "q_values": q_values.reindex(found).to_numpy(dtype=float).tolist() if q_values is not None else None,
+                "values": values.to_numpy(dtype=float).tolist(),
+                "q_values": q_values.to_numpy(dtype=float).tolist() if q_values is not None else None,
             }
 
         return self._memo(("heatmap", tuple(found), tuple(missing), metric, expressed_only), build)
@@ -453,6 +470,14 @@ class Store:
         df = df.sort_values(["cancer_type", "reference"])
         return {"rows": _records(df)}
 
+    def contrast_frame(self, cancer_type: str | None = None) -> pd.DataFrame:
+        """Contrast summary table for CSV export (keeps the header when no row matches)."""
+        df = self.noise_contrasts
+        if cancer_type is not None:
+            self.cancer(cancer_type)
+            df = df[df["cancer_type"] == cancer_type]
+        return df.sort_values(["cancer_type", "reference"])
+
     def contrast_patients(self, cancer_type: str) -> dict[str, Any]:
         self.cancer(cancer_type)
         df = self.noise_contrasts_patient
@@ -475,10 +500,7 @@ class Store:
                         "n_patients_paired": info.get("n_patients_paired"),
                         "depth2_cell_median_malignant": per_comp[MALIGNANT],
                         "depth2_cell_median_non_malignant": per_comp[NON_MALIGNANT],
-                        **{
-                            c: info.get(c)
-                            for c in ("depth2_cell_median_diff", "depth2_cell_p", "depth2_pseudobulk_median_diff", "depth2_pseudobulk_p")
-                        },
+                        **{c: info.get(c) for c in ("depth2_cell_median_diff", "depth2_cell_p", "depth2_pseudobulk_median_diff", "depth2_pseudobulk_p")},
                     }
                 )
             return {"rows": rows}

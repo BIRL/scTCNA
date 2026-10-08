@@ -9,11 +9,8 @@ venv
 
 # Data that is not served by the app (raw downloads, per-dataset outputs,
 # synthetic tables). data/app is intentionally NOT ignored.
-data/raw
-data/interim
-data/processed
-data/processed*
-data/app_syn
+data/*
+!data/app
 *.h5ad
 *.h5
 *.mtx

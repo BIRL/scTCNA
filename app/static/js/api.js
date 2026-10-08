@@ -488,7 +488,7 @@
           version.textContent = parts.join(' · ');
           if (h.status !== 'ok') showError('The server has no data tables loaded yet (' + (h.detail || h.status) + ').');
         })
-        .catch(() => {});
+        .catch((e) => showError('The data tables are not available: ' + e.message));
     }
   }
   document.addEventListener('DOMContentLoaded', initChrome);

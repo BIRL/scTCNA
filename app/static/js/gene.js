@@ -140,7 +140,7 @@
         div.dataset.clickBound = '1';
         div.on('plotly_click', (ev) => {
           const pt = ev.points && ev.points[0];
-          if (pt && pt.x) selectDetailCancer(String(pt.x));
+          if (pt && pt.x) selectDetailCancer(String(pt.x), true);
         });
       }
     });
@@ -153,11 +153,12 @@
     selectDetailCancer(keep);
   }
 
-  function selectDetailCancer(cancerType) {
+  function selectDetailCancer(cancerType, scroll) {
     if (!cancerType) return;
     state.detailCancer = cancerType;
     $('detail-cancer').value = cancerType;
-    if (state.mode === 'pan') $('detail-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // scroll only when the user picked a cancer type in a plot, not on every new search
+    if (scroll && state.mode === 'pan') $('detail-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     loadDetail();
   }
 
@@ -184,6 +185,7 @@
     $('detail-ds').disabled = !dsKey;
     $('paired-title').textContent = 'Paired per-patient ' + METRIC_LABELS[metric] + ' – ' + state.detailCancer;
     const rows = state.patients;
+    $('detail-csv').hidden = !rows;
     if (!rows) {
       Plots.empty('plot-paired', state.patientsError || 'No per-patient values.');
       $('paired-stats').textContent = '';
