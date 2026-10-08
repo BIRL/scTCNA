@@ -12,13 +12,20 @@ import numpy as np
 import scipy.sparse as sp
 
 
-def normalize_cp10k(counts: sp.spmatrix, target_sum: float = 1e4) -> sp.csr_matrix:
-    """Scale each cell (row) to ``target_sum`` total counts. Zero-count cells stay zero."""
-    X = sp.csr_matrix(counts, dtype=np.float32)
-    totals = np.asarray(X.sum(axis=1)).ravel()
+def normalize_cp10k(counts: sp.spmatrix, target_sum: float = 1e4, chunk_rows: int = 20_000) -> sp.csr_matrix:
+    """Scale each cell (row) to ``target_sum`` total counts. Zero-count cells stay zero.
+
+    Rows are scaled in place on one float32 copy, block by block, so the peak
+    memory is about one extra matrix rather than two.
+    """
+    X = sp.csr_matrix(counts, dtype=np.float32, copy=True)
+    totals = np.asarray(X.sum(axis=1, dtype=np.float64)).ravel()
     scale = np.where(totals > 0, target_sum / np.where(totals > 0, totals, 1.0), 0.0).astype(np.float32)
-    out = sp.diags(scale) @ X
-    return sp.csr_matrix(out, dtype=np.float32)
+    for a in range(0, X.shape[0], chunk_rows):
+        b = min(X.shape[0], a + chunk_rows)
+        lo, hi = X.indptr[a], X.indptr[b]
+        X.data[lo:hi] *= np.repeat(scale[a:b], np.diff(X.indptr[a : b + 1]))
+    return X
 
 
 def log2p1(X: sp.spmatrix) -> sp.csr_matrix:

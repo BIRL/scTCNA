@@ -15,8 +15,6 @@ import numpy as np
 import scanpy as sc
 import scipy.sparse as sp
 
-from .normalize import select_columns
-
 log = logging.getLogger(__name__)
 
 
@@ -26,7 +24,7 @@ def add_qc_metrics(adata: ad.AnnData, mito_prefix: str = "MT-") -> ad.AnnData:
     adata.obs["n_genes"] = np.diff(X.indptr)
     mito = adata.var_names.str.upper().str.startswith(mito_prefix.upper())
     adata.var["mito"] = mito
-    mito_counts = np.asarray(select_columns(X, mito).sum(axis=1)).ravel() if mito.any() else np.zeros(adata.n_obs)
+    mito_counts = X @ mito.astype(np.float64) if mito.any() else np.zeros(adata.n_obs)  # matrix-vector product: no copy of X
     with np.errstate(divide="ignore", invalid="ignore"):
         adata.obs["pct_mito"] = np.where(adata.obs["n_counts"] > 0, 100.0 * mito_counts / adata.obs["n_counts"], 0.0)
     return adata

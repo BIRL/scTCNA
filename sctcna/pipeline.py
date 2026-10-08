@@ -16,6 +16,7 @@ web app reads (``data/app``).
 
 from __future__ import annotations
 
+import gc
 import json
 import logging
 import time
@@ -28,10 +29,10 @@ import scipy.sparse as sp
 from scipy import stats as sps
 
 from . import __version__
-from .depth import depth2_matrix, depth2_per_cell, depth_matrix, depth_per_cell, gene_mean_sd, pseudobulk_log_cpm
+from .depth import depth2_matrix, depth_matrix, depth_scores_from_counts, pseudobulk_log_cpm
 from .io import MALIGNANT, NON_MALIGNANT
 from .metrics import METRIC_COLUMNS, gene_noise_table, log2_fold_change, mean_trend_residual, trend_excess
-from .normalize import log2p1, normalize_cp10k, select_columns
+from .normalize import normalize_cp10k
 from .qc import add_qc_metrics, common_depth_target, downsample_counts, filter_cells, filter_genes, run_scrublet
 from .stats import compartment_medians, one_sample_wilcoxon, paired_noise_tests, paired_score_test
 
@@ -175,8 +176,8 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     summary: dict = {"dataset": meta["id"], "cancer_type": meta["cancer_type"], "sctcna_version": __version__, "params": params}
 
     # 1. QC -----------------------------------------------------------------
-    adata = adata.copy()
-    adata.X = sp.csr_matrix(adata.X, dtype=np.int32)
+    # new AnnData with copied annotations; the count matrix is shared (it is only read, never modified in place)
+    adata = ad.AnnData(X=sp.csr_matrix(adata.X, dtype=np.int32), obs=adata.obs.copy(), var=adata.var.copy(), uns=dict(adata.uns))
     add_qc_metrics(adata, qc["mito_prefix"])
     adata, cell_stats = filter_cells(adata, qc["min_genes_per_cell"], qc["min_counts_per_cell"], qc["max_pct_mito"])
     adata, gene_stats = filter_genes(adata, qc["min_cells_per_gene"])
@@ -209,11 +210,15 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     by_ct = adata.obs.groupby(["patient", "cell_type"], observed=True)
     per_celltype = _metrics_for_groups(norm, by_ct, genes, grp["min_cells_per_celltype_group"], frac, ["patient", "cell_type"])
 
+    del norm
+    gc.collect()
+
     # 4. downsampled robustness check -----------------------------------------------
     if ds_p.get("enabled", True):
         target = common_depth_target(adata.obs["n_counts"].to_numpy(), ds_p["depth_quantile"], ds_p["min_depth"])
         counts_ds = downsample_counts(counts, target, params["sampling"]["seed"])
         norm_ds = normalize_cp10k(counts_ds, norm_p["target_sum"])
+        del counts_ds
         pp_ds = _metrics_for_groups(norm_ds, by_pc, genes, grp["min_cells_per_group"], frac, ["patient", "compartment"])
         pp_ds = pp_ds[["gene", "patient", "compartment", "mean", "cv", "mad", "fano", "cv2_resid"]].rename(
             columns={"mean": "mean_ds", "cv": "cv_ds", "mad": "mad_ds", "fano": "fano_ds", "cv2_resid": "cv2_resid_ds"}
@@ -222,6 +227,8 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
         ct_ds = _metrics_for_groups(norm_ds, by_ct, genes, grp["min_cells_per_celltype_group"], frac, ["patient", "cell_type"])
         ct_ds = ct_ds[["gene", "patient", "cell_type", "mean", "cv"]].rename(columns={"mean": "mean_ds", "cv": "cv_ds"})
         per_celltype = per_celltype.merge(ct_ds, on=["gene", "patient", "cell_type"], how="left")
+        del norm_ds
+        gc.collect()
         summary["downsampling"] = {"target_depth": int(target), "cells_above_target": int((adata.obs["n_counts"] > target).sum())}
         ok = per_patient[["cv", "cv_ds"]].dropna()
         summary["downsampling"]["spearman_cv_vs_cv_ds"] = float(sps.spearmanr(ok["cv"], ok["cv_ds"]).statistic) if len(ok) > 10 else np.nan
@@ -243,15 +250,11 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     ]
 
     # 5. DEPTH / DEPTH2 ---------------------------------------------------------------
-    logX = log2p1(norm)
-    det = np.bincount(sp.csr_matrix(counts).indices, minlength=adata.n_vars) / adata.n_obs
+    det = np.bincount(counts.indices, minlength=adata.n_vars) / adata.n_obs
     depth_genes = det >= depth_p["min_detection_rate_genes"]
-    logX_d = select_columns(logX, depth_genes)
     is_non_mal = (adata.obs["compartment"] == NON_MALIGNANT).to_numpy()
-    mean_all, sd_all = gene_mean_sd(logX_d)
-    cell_depth2 = depth2_per_cell(logX_d, mean_all, sd_all)
-    ref_mean = np.asarray(logX_d[is_non_mal].mean(axis=0)).ravel() if is_non_mal.any() else mean_all
-    cell_depth = depth_per_cell(logX_d, ref_mean)
+    # DEPTH reference = mean over non-malignant cells (all cells when there are none); DEPTH2 z-scores across all cells
+    cell_depth, cell_depth2 = depth_scores_from_counts(counts, depth_genes, is_non_mal, norm_p["target_sum"])
     cell_scores = adata.obs[["cell_name", "sample", "patient", "cell_type", "compartment", "n_counts", "n_genes", "pct_mito", "doublet_score"]].copy()
     cell_scores["depth"] = cell_depth
     cell_scores["depth2"] = cell_depth2
@@ -260,7 +263,7 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     cell_scores = cell_scores.reset_index(drop=True)
 
     labels = adata.obs["patient"].astype(str) + "|" + adata.obs["compartment"].astype(str)
-    pb, pb_n = pseudobulk_log_cpm(select_columns(counts, depth_genes), labels, min_cells=grp["min_cells_per_group"])
+    pb, pb_n = pseudobulk_log_cpm(counts, labels, min_cells=grp["min_cells_per_group"], columns=depth_genes)
     pb_meta = pd.DataFrame({"label": pb.columns})
     pb_meta[["patient", "compartment"]] = pb_meta["label"].str.split("|", expand=True)
     pb_meta["n_cells"] = pb_n.reindex(pb.columns).to_numpy()

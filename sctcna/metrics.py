@@ -31,20 +31,39 @@ from statsmodels.nonparametric.smoothers_lowess import lowess
 METRIC_COLUMNS = ["n_cells", "mean", "detection_rate", "sd", "var", "cv", "cv2", "mad", "fano"]
 
 
+CHUNK_ROWS = 20_000  # rows processed at a time; bounds temporary memory on large groups of cells
+
+
 def _as_csr(X) -> sp.csr_matrix:
-    X = sp.csr_matrix(X, dtype=np.float64, copy=True)  # copy: eliminate_zeros() must not touch the caller's matrix
-    X.sum_duplicates()
-    X.eliminate_zeros()
+    """CSR view of ``X`` (dense or sparse) with duplicates summed; the caller's matrix is never modified."""
+    X = sp.csr_matrix(X)
+    if not X.has_canonical_format:
+        X = X.copy()
+        X.sum_duplicates()
     return X
 
 
+def _chunks(X: sp.csr_matrix):
+    """Yield (data as float64, column indices) of consecutive row blocks without copying the matrix."""
+    for a in range(0, X.shape[0], CHUNK_ROWS):
+        b = min(X.shape[0], a + CHUNK_ROWS)
+        lo, hi = X.indptr[a], X.indptr[b]
+        yield X.data[lo:hi].astype(np.float64), X.indices[lo:hi]
+
+
 def gene_moments(X) -> dict[str, np.ndarray]:
-    """Per-gene n, mean, sample variance (ddof=1), SD and detection rate."""
+    """Per-gene n, mean, sample variance (ddof=1), SD and detection rate.
+
+    Sums are accumulated per row block, so memory stays bounded for large
+    groups. Explicitly stored zeros do not count as detected.
+    """
     X = _as_csr(X)
     n, g = X.shape
-    s1 = np.asarray(X.sum(axis=0)).ravel()
-    s2 = np.asarray(X.multiply(X).sum(axis=0)).ravel()
-    nnz = np.bincount(X.indices, minlength=g).astype(np.float64)
+    s1, s2, nnz = np.zeros(g), np.zeros(g), np.zeros(g)
+    for d, idx in _chunks(X):
+        s1 += np.bincount(idx, weights=d, minlength=g)
+        s2 += np.bincount(idx, weights=d * d, minlength=g)
+        nnz += np.bincount(idx, weights=(d != 0).astype(np.float64), minlength=g)
     mean = s1 / n if n else np.full(g, np.nan)
     if n > 1:
         var = (s2 - n * mean**2) / (n - 1)
@@ -61,11 +80,13 @@ def mean_absolute_deviation(X, mean: np.ndarray | None = None) -> np.ndarray:
     if n == 0:
         return np.full(g, np.nan)
     if mean is None:
-        mean = np.asarray(X.sum(axis=0)).ravel() / n
-    dev = np.abs(X.data - mean[X.indices])
-    sum_dev = np.bincount(X.indices, weights=dev, minlength=g)
-    nnz = np.bincount(X.indices, minlength=g)
-    return (sum_dev + (n - nnz) * np.abs(mean)) / n
+        mean = gene_moments(X)["mean"]
+    sum_dev, stored = np.zeros(g), np.zeros(g)
+    for d, idx in _chunks(X):
+        sum_dev += np.bincount(idx, weights=np.abs(d - mean[idx]), minlength=g)
+        stored += np.bincount(idx, minlength=g)
+    # every entry not stored is a zero, contributing |0 - mean|
+    return (sum_dev + (n - stored) * np.abs(mean)) / n
 
 
 def gene_noise_table(X, gene_names=None) -> pd.DataFrame:

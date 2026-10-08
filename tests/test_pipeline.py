@@ -297,7 +297,8 @@ def test_cell_scores_match_depth2_recomputed_from_the_fixture(processed_dir, app
     expected = depth2_per_cell(log_used, mean, sd)
     np.testing.assert_allclose(cells["depth2"].to_numpy(), expected, rtol=0, atol=1e-8)
     app_cells = pd.read_parquet(app_data_dir / "cell_scores.parquet")
-    np.testing.assert_allclose(app_cells.loc[app_cells["dataset"] == FIRST, "depth2"].to_numpy(), expected, rtol=0, atol=1e-8)
+    # the app copy is stored as float32 to keep the served tables small
+    np.testing.assert_allclose(app_cells.loc[app_cells["dataset"] == FIRST, "depth2"].to_numpy(), expected, rtol=1e-6)
 
 
 def test_pseudobulk_scores_match_recomputation_from_counts(processed_dir, synthetic_adata, fast_params):

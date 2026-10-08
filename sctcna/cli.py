@@ -37,8 +37,8 @@ def _run(args) -> int:
     failures = 0
     for entry in entries:
         try:
-            adata = load_dataset(entry, args.raw, p["sampling"]["max_cells_per_patient_compartment"], p["sampling"]["seed"])
-            process_dataset(adata, p, entry, args.out)
+            # passed straight through so the loaded matrix is not kept alive by this frame
+            process_dataset(load_dataset(entry, args.raw, p["sampling"]["max_cells_per_patient_compartment"], p["sampling"]["seed"]), p, entry, args.out)
         except FileNotFoundError as exc:
             logging.error("%s: data not found (%s). Run scripts/download_data.py first.", entry["id"], exc)
             failures += 1
