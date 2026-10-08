@@ -77,8 +77,9 @@ def main(argv=None) -> int:
         genes_by_cancer = {}
         for ct in cancers:
             for metric in ("cv", "mad", "fano", "cv2_resid", "sd"):
-                _get(base, f"/api/cancer-types/{ct}/comparison", {"metric": metric})
-                n_requests += 1
+                for expressed in ("true", "false"):
+                    _get(base, f"/api/cancer-types/{ct}/comparison", {"metric": metric, "expressed_only": expressed})
+                    n_requests += 1
             for metric in RANK_METRICS:
                 top = json.loads(_get(base, f"/api/cancer-types/{ct}/top-genes", {"metric": metric, "n": 500}))
                 n_requests += 1
@@ -93,11 +94,15 @@ def main(argv=None) -> int:
             _get(base, f"/api/genes/{gene}/patients", {"cancer_type": ct})
             _get(base, f"/api/genes/{gene}/celltypes", {"cancer_type": ct})
             n_requests += 4
-        pool = sorted({g for gs in genes_by_cancer.values() for g in gs})[:200]
-        for metric in RANK_METRICS:
+        pool = sorted({g for gs in genes_by_cancer.values() for g in gs})
+        for i, metric in enumerate(RANK_METRICS):
             for expressed in ("true", "false"):
-                _get(base, "/api/heatmap", {"genes": ",".join(pool), "metric": metric, "expressed_only": expressed})
+                genes = pool[i * 50 : i * 50 + 200] or pool[:200]  # a different 200-gene list per request
+                _get(base, "/api/heatmap", {"genes": ",".join(genes), "metric": metric, "expressed_only": expressed})
                 n_requests += 1
+        for ct in cancers:  # per-patient tables of every dataset, more than the in-memory limit
+            _get(base, f"/api/genes/{genes_by_cancer[ct][0]}/patients", {"cancer_type": ct})
+            n_requests += 1
         _get(base, "/api/tumor-heterogeneity/summary")
         _get(base, "/api/noise-contrasts")
         _get(base, "/api/download/gene_summary.csv")
