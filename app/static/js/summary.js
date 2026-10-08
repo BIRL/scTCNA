@@ -29,11 +29,11 @@
         name: m.label,
         color: m.color,
         values: rows.map((r) => r[m.summary]),
-        hover: rows.map((r) => r.cancer_type + ' · ' + m.label + '<br>median over patients: ' + fmt(r[m.summary]) + '<br>p: ' + App.fmtP(r[m.p]) + ' · patients: ' + r.n_patients),
+        hover: rows.map((r) => r.cancer_type + ' · ' + m.label + '<br>median over patients: ' + fmt(r[m.summary]) + '<br>p: ' + App.fmtP(r[m.p]) + ' · q: ' + App.fmtP(r['q' + m.p.slice(1)]) + ' · patients: ' + r.n_patients),
       })),
       { ytitle: 'median over patients', rangemode: 'normal', filename: 'sctcna_noise_contrast_all' }
     );
-    const keys = ['cancer_type', 'n_patients', 'median_log2fc_cv', 'p_log2fc_cv', 'median_log2fc_cv_ds', 'p_log2fc_cv_ds', 'median_excess_cv2_ds', 'p_excess_cv2_ds', 'frac_patients_excess_positive'];
+    const keys = ['cancer_type', 'n_patients', 'median_log2fc_cv', 'q_log2fc_cv', 'median_log2fc_cv_ds', 'q_log2fc_cv_ds', 'median_excess_cv2_ds', 'p_excess_cv2_ds', 'q_excess_cv2_ds', 'frac_patients_excess_positive'];
     const labels = {
       median_log2fc_cv: { label: 'log2 CV ratio (raw)' },
       p_log2fc_cv: { label: 'p (raw)', format: App.fmtP },
@@ -41,6 +41,9 @@
       p_log2fc_cv_ds: { label: 'p (depth-matched)', format: App.fmtP },
       median_excess_cv2_ds: { label: 'Excess noise (log10 CV²)' },
       p_excess_cv2_ds: { label: 'p (excess)', format: App.fmtP },
+      q_log2fc_cv: { label: 'q (raw)', format: App.fmtP, className: (v) => (App.isNum(v) && v < 0.05 ? 'sig' : '') },
+      q_log2fc_cv_ds: { label: 'q (depth-matched)', format: App.fmtP, className: (v) => (App.isNum(v) && v < 0.05 ? 'sig' : '') },
+      q_excess_cv2_ds: { label: 'q (excess)', format: App.fmtP, className: (v) => (App.isNum(v) && v < 0.05 ? 'sig' : '') },
       frac_patients_excess_positive: { label: 'Patients with excess > 0', format: (v) => (App.isNum(v) ? Math.round(v * 100) + '%' : '–') },
     };
     App.renderTable('table-all', App.columns(keys, labels), rows, { sortKey: 'cancer_type', sortDir: 'asc' });
@@ -99,7 +102,7 @@
       },
       'sctcna_noise_contrast_' + ct
     );
-    const keys = ['reference', 'n_patients', 'median_log2fc_cv', 'p_log2fc_cv', 'median_log2fc_cv_ds', 'p_log2fc_cv_ds', 'median_excess_cv2_ds', 'p_excess_cv2_ds', 'frac_patients_excess_positive'];
+    const keys = ['reference', 'n_patients', 'median_log2fc_cv', 'q_log2fc_cv', 'median_log2fc_cv_ds', 'q_log2fc_cv_ds', 'median_excess_cv2_ds', 'p_excess_cv2_ds', 'q_excess_cv2_ds', 'frac_patients_excess_positive'];
     const cols = App.columns(keys, {
       reference: { label: 'Reference', format: refLabel },
       median_log2fc_cv: { label: 'log2 CV ratio (raw)' },
@@ -108,6 +111,9 @@
       p_log2fc_cv_ds: { label: 'p (depth-matched)', format: App.fmtP },
       median_excess_cv2_ds: { label: 'Excess noise (log10 CV²)' },
       p_excess_cv2_ds: { label: 'p (excess)', format: App.fmtP },
+      q_log2fc_cv: { label: 'q (raw)', format: App.fmtP, className: (v) => (App.isNum(v) && v < 0.05 ? 'sig' : '') },
+      q_log2fc_cv_ds: { label: 'q (depth-matched)', format: App.fmtP, className: (v) => (App.isNum(v) && v < 0.05 ? 'sig' : '') },
+      q_excess_cv2_ds: { label: 'q (excess)', format: App.fmtP, className: (v) => (App.isNum(v) && v < 0.05 ? 'sig' : '') },
       frac_patients_excess_positive: { label: 'Patients with excess > 0', format: (v) => (App.isNum(v) ? Math.round(v * 100) + '%' : '–') },
     });
     App.renderTable('table-patients', cols, data.summary, { sortKey: 'n_patients', sortDir: 'desc' });
