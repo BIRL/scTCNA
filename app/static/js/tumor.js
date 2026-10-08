@@ -10,7 +10,7 @@
   const SAMPLE_KEYS = ['patient', 'compartment', 'n_cells', 'depth2_pseudobulk', 'depth_pseudobulk', 'depth2_cell_median', 'depth_cell_median'];
   const SUMMARY_KEYS = [
     'cancer_type', 'cancer_name', 'n_patients_paired', 'depth2_cell_median_malignant', 'depth2_cell_median_non_malignant',
-    'depth2_cell_median_diff', 'depth2_cell_p', 'depth2_pseudobulk_median_diff', 'depth2_pseudobulk_p', 'depth_cell_median_diff', 'depth_cell_p',
+    'depth2_cell_median_diff', 'depth2_cell_p', 'depth2_pseudobulk_median_diff', 'depth2_pseudobulk_p',
   ];
   const SUMMARY_LABELS = {
     depth2_cell_median_malignant: { label: 'DEPTH2 per cell, Malignant' },
@@ -40,8 +40,8 @@
   }
 
   function statsText(test, what) {
-    if (!test || !test.n_pairs) return 'No paired test: fewer than two patients with both compartments.';
-    return 'Paired Wilcoxon on ' + what + ': n = ' + test.n_pairs + ' patient pairs · median difference (Malignant − Non-malignant) = ' + fmt(test.median_diff) + ' · p = ' + fmtP(test.p_value) + ' · rank-biserial = ' + fmt(test.rank_biserial) + (App.isNum(test.p_value) ? '' : ' (test needs at least 3 pairs)');
+    if (!test || !test.n_pairs) return 'No paired test: DEPTH is only defined for malignant cells (the non-malignant cells are its reference), or too few patients have both compartments.';
+    return 'Paired Wilcoxon on ' + what + ': n = ' + test.n_pairs + ' patient pairs · median difference (Malignant − Non-malignant) = ' + fmt(test.median_diff) + ' · p = ' + fmtP(test.p_value) + ' · rank-biserial = ' + fmt(test.rank_biserial) + (App.isNum(test.p_value) ? '' : ' (test needs at least 6 pairs)');
   }
 
   async function run() {

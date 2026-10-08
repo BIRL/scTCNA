@@ -28,7 +28,7 @@
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
     <h1 class="page-title">Tumor Heterogeneity</h1>
-    <p class="page-lead">DEPTH2 and DEPTH scores on log2-transformed expression, as in TCNA. At the <strong>cell</strong> level every cell is a sample (genes z-scored across all cells of the dataset); at the <strong>sample</strong> level each patient x compartment pseudo-bulk profile is a sample. Compartments are compared with a paired Wilcoxon test across patients.</p>
+    <p class="page-lead">DEPTH2 and DEPTH scores on log2-transformed expression, as in TCNA. At the <strong>cell</strong> level every cell is a sample: DEPTH2 z-scores genes across the cells of the same patient and compartment (how atypical a cell is within its own tumour), and DEPTH scores malignant cells against the mean of the non-malignant cells (its "normal" reference, so non-malignant cells have no DEPTH). At the <strong>sample</strong> level each patient x compartment pseudo-bulk profile is a sample. DEPTH2 is compared between compartments with a paired Wilcoxon test across patients.</p>
 
     <section class="card">
       <form id="form" class="controls">

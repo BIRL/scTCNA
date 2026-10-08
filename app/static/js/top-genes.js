@@ -7,7 +7,7 @@
 
   const MAX_BARS = 100;
   const TABLE_KEYS = [
-    'rank', 'gene', 'value', 'mean_malignant', 'mean_non_malignant', 'detection_rate_malignant', 'detection_rate_non_malignant',
+    'rank', 'gene', 'value', 'value_q', 'mean_malignant', 'mean_non_malignant', 'detection_rate_malignant', 'detection_rate_non_malignant',
     'cv_malignant', 'cv_non_malignant', 'mad_malignant', 'mad_non_malignant', 'fano_malignant', 'fano_non_malignant',
     'cv2_resid_malignant', 'cv2_resid_non_malignant', 'log2fc_cv_median', 'delta_cv2_resid', 'p_value', 'q_value', 'rank_biserial', 'n_pairs',
   ];
@@ -59,7 +59,7 @@
     let colors;
     let chips = '';
     if (info.hasQ) {
-      colors = shown.map((r) => (App.isNum(r.q_value) && r.q_value < 0.05 ? Plots.COLORS.significant : Plots.COLORS.neutral));
+      colors = shown.map((r) => (App.isNum(r.value_q) && r.value_q < 0.05 ? Plots.COLORS.significant : Plots.COLORS.neutral));
       chips = '<span class="chip chip-sig">q &lt; 0.05</span><span class="chip chip-ns">not significant</span>';
     } else {
       colors = Plots.COLORS[info.compartment] || Plots.COLORS.accent;
@@ -74,7 +74,7 @@
           r.gene + '<br>' + info.label + ': ' + fmt(r.value) +
           '<br>mean Mal / Non-mal: ' + fmt(r.mean_malignant) + ' / ' + fmt(r.mean_non_malignant) +
           '<br>CV Mal / Non-mal: ' + fmt(r.cv_malignant) + ' / ' + fmt(r.cv_non_malignant) +
-          (info.hasQ ? '<br>p = ' + fmtP(r.p_value) + ', q = ' + fmtP(r.q_value) + ', n = ' + fmt(r.n_pairs) : '')
+          (info.hasQ ? '<br>q (this metric) = ' + fmtP(r.value_q) + ', paired patients = ' + fmt(r.n_pairs) : '')
       ),
       xtitle: info.label,
       height: Math.max(380, 18 * shown.length + 90),

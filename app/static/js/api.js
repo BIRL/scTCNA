@@ -17,6 +17,7 @@
     gene: 'Gene',
     rank: '#',
     value: 'Value',
+    value_q: 'q (this metric)',
     patient: 'Patient',
     compartment: 'Compartment',
     cell_type: 'Cell type',
@@ -194,7 +195,7 @@
   }
 
   function isPColumn(key) {
-    return /^(p_value|q_value)(_|$)/.test(key) || key === 'p' || key === 'q';
+    return /^(p_value|q_value)(_|$)/.test(key) || key === 'p' || key === 'q' || key === 'value_q';
   }
 
   function columnLabel(key) {
@@ -209,7 +210,7 @@
       if (isPColumn(key)) col.format = fmtP;
       if (key === 'compartment') col.format = (v) => COMPARTMENT_LABEL[v] || v;
       if (key === 'compartment') col.className = (v) => (v === 'malignant' ? 'mal' : v === 'non_malignant' ? 'non' : '');
-      if (/^q_value/.test(key)) col.className = (v) => (isNum(v) && v < 0.05 ? 'sig' : '');
+      if (/^q_value/.test(key) || key === 'value_q') col.className = (v) => (isNum(v) && v < 0.05 ? 'sig' : '');
       return Object.assign(col, overrides[key] || {});
     });
   }

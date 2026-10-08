@@ -35,7 +35,7 @@ RANK_METRICS: dict[str, str | None] = {
     "log2fc_cv_median": "q_value",
     "log2fc_mad_median": "q_value_mad",
     "log2fc_fano_median": "q_value_fano",
-    "delta_cv2_resid": "q_value",
+    "delta_cv2_resid": "q_value_cv2_resid",
     "cv_malignant": None,
     "cv_non_malignant": None,
     "mad_malignant": None,
@@ -47,12 +47,12 @@ RANK_METRICS: dict[str, str | None] = {
 }
 # Metrics of the malignant vs non-malignant comparison: (per-gene fold-change column or None when it is
 # computed from the two compartment medians, q-value column).
-COMPARISON_METRICS: dict[str, tuple[str | None, str]] = {
+COMPARISON_METRICS: dict[str, tuple[str | None, str | None]] = {
     "cv": ("log2fc_cv_median", "q_value"),
     "mad": ("log2fc_mad_median", "q_value_mad"),
     "fano": ("log2fc_fano_median", "q_value_fano"),
-    "cv2_resid": ("delta_cv2_resid", "q_value"),
-    "sd": (None, "q_value"),
+    "cv2_resid": ("delta_cv2_resid", "q_value_cv2_resid"),
+    "sd": (None, None),  # no paired test is run on SD; its ratio is shown without a q-value
 }
 DIRECTIONS = ("noisy", "stable")
 SCORES = ("depth2", "depth")
@@ -309,6 +309,8 @@ class Store:
         df = df.sort_values([metric, "gene"], ascending=[direction == "stable", True]).head(n)
         rows = df[TOP_GENE_COLUMNS].copy()
         rows.insert(1, "value", df[metric].to_numpy(dtype=float))
+        q_column = RANK_METRICS[metric]
+        rows.insert(2, "value_q", df[q_column].to_numpy(dtype=float) if q_column else np.nan)
         return {"cancer_type": cancer_type, "metric": metric, "direction": direction, "n": n, "rows": _records(rows)}
 
     def comparison(self, cancer_type: str, metric: str = "cv", expressed_only: bool = True) -> dict[str, Any]:
@@ -326,7 +328,7 @@ class Store:
         keep = np.isfinite(a) & np.isfinite(b)
         df, a, b = df[keep], a[keep], b[keep]
         log2fc = _log2_ratio(a, b) if fc_column is None else df[fc_column].to_numpy(dtype=float)
-        q = df[q_column].to_numpy(dtype=float)
+        q = df[q_column].to_numpy(dtype=float) if q_column else np.full(len(df), np.nan)
         with np.errstate(invalid="ignore"):
             sig = q < SIGNIFICANCE
         return {
@@ -422,6 +424,7 @@ class Store:
         compartments = {}
         for comp in COMPARTMENTS:
             values = cells.loc[cells["compartment"] == comp, score].to_numpy(dtype=float)
+            values = values[np.isfinite(values)]  # DEPTH is undefined (NaN) for non-malignant cells
             shown = values
             if values.size > MAX_CELL_VALUES:
                 # fixed seed: the same cells are shown on every request
@@ -474,7 +477,7 @@ class Store:
                         "depth2_cell_median_non_malignant": per_comp[NON_MALIGNANT],
                         **{
                             c: info.get(c)
-                            for c in ("depth2_cell_median_diff", "depth2_cell_p", "depth2_pseudobulk_median_diff", "depth2_pseudobulk_p", "depth_cell_median_diff", "depth_cell_p")
+                            for c in ("depth2_cell_median_diff", "depth2_cell_p", "depth2_pseudobulk_median_diff", "depth2_pseudobulk_p")
                         },
                     }
                 )
@@ -497,7 +500,7 @@ class Store:
         return self.cell_scores.iloc[self._cells_idx_by_cancer.get(cancer_type, [])][CELL_ROW_COLUMNS]
 
     def top_genes_frame(self, cancer_type: str, metric: str, direction: str, n: int, expressed_only: bool) -> pd.DataFrame:
-        return pd.DataFrame(self.top_genes(cancer_type, metric, direction, n, expressed_only)["rows"], columns=["gene", "value", *TOP_GENE_COLUMNS[1:]])
+        return pd.DataFrame(self.top_genes(cancer_type, metric, direction, n, expressed_only)["rows"], columns=["gene", "value", "value_q", *TOP_GENE_COLUMNS[1:]])
 
     def gene_patients_frame(self, gene: str, cancer_type: str) -> pd.DataFrame:
         res = self.gene_patients(gene, cancer_type)

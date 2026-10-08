@@ -85,7 +85,7 @@
           <tr><td>CV</td><td><span class="formula">CV = SD / mean</span></td><td>TCNA's coefficient of variation (stored as a ratio; TCNA's web code reports CV x 100). Undefined (blank) when the mean is 0.</td></tr>
           <tr><td>CV&sup2;</td><td><span class="formula">CV&sup2; = (SD / mean)&sup2;</span></td><td></td></tr>
           <tr><td>MAD</td><td><span class="formula">MAD = (1/n) &Sigma;<sub>i</sub> |x<sub>ig</sub> - mean|</span></td><td><strong>Mean</strong> absolute deviation about the mean, the TCNA definition (not the median absolute deviation).</td></tr>
-          <tr><td>Fano</td><td><span class="formula">Fano = variance / mean = SD&sup2; / mean</span></td><td>scTCNA addition; Poisson sampling noise gives Fano = 1.</td></tr>
+          <tr><td>Fano</td><td><span class="formula">Fano = variance / mean = SD&sup2; / mean</span></td><td>scTCNA addition. Computed on the CP10K scale, so it depends on sequencing depth: for Poisson counts at library size N it is about 10<sup>4</sup>/N. Compare compartments with the downsampled (depth-matched) values or the Cross-cancer summary.</td></tr>
           <tr><td>Detection rate</td><td><span class="formula">det = (1/n) &Sigma;<sub>i</sub> [x<sub>ig</sub> &gt; 0]</span></td><td>Fraction of cells with a non-zero count (scTCNA addition).</td></tr>
           <tr><td>mean-corrected CV&sup2; (LOWESS residual)</td><td><span class="formula">cv2_resid = log10(CV&sup2;) - f(log10 mean)</span></td><td><em>f</em> is a LOWESS curve (frac 0.3, 2 robustifying iterations) fitted across all genes of the same group of cells; positive values are noisier than genes of the same mean. Needs &ge; 50 usable genes per group.</td></tr>
           <tr><td>differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</td><td><span class="formula">D<sub>gp</sub> = log2( CV<sub>gp</sub><sup>malignant</sup> / CV<sub>gp</sub><sup>non-malignant</sup> )</span></td><td>TCNA Eq. 1 evaluated per patient <em>p</em>; the cancer-type value is the median of D<sub>gp</sub> across patients. The same ratio is formed for MAD and Fano; for the mean-corrected CV&sup2; the difference of residuals is used (it is already on a log scale).</td></tr>
@@ -93,10 +93,10 @@
       </table>
       <h3 style="margin-top: 16px;">Statistics</h3>
       <ul>
-        <li>Per gene and cancer type, the per-patient D<sub>gp</sub> (at least 5 patients with both compartments) are tested with a two-sided Wilcoxon signed-rank test (zero differences discarded).</li>
+        <li>Per gene and cancer type, the per-patient D<sub>gp</sub> (at least 6 patients with both compartments) are tested with a two-sided Wilcoxon signed-rank test (zero differences discarded).</li>
         <li>Effect sizes: the median per-patient log2 ratio and the matched-pairs rank-biserial correlation <span class="formula">r = (R<sup>+</sup> - R<sup>-</sup>) / (R<sup>+</sup> + R<sup>-</sup>)</span> (+1 when every patient is noisier in malignant cells).</li>
         <li>Benjamini-Hochberg q-values per cancer type over the expressed genes that were tested; q &lt; 0.05 is highlighted in the plots.</li>
-        <li>The same paired test (at least 3 patients) compares the per-patient DEPTH / DEPTH2 medians and pseudo-bulk scores between compartments.</li>
+        <li>The same paired test (at least 6 patients) compares the per-patient DEPTH2 medians and pseudo-bulk DEPTH2 between compartments.</li>
       </ul>
     </section>
 
@@ -108,7 +108,7 @@
         <li><strong>log2 CV ratio (depth-matched)</strong>: the same after downsampling every cell to the common UMI depth, so that deeper-sequenced cells do not look less noisy.</li>
         <li><strong>Excess noise</strong>: median over genes of log10(CV&sup2;<sub>mal</sub>) minus the reference group's LOWESS mean-CV&sup2; trend evaluated at the malignant gene's mean (depth-matched; genes outside the reference's expression range are skipped). It removes both the mean dependence of CV and the depth difference.</li>
       </ul>
-      <p>Each measure is tested against zero across patients with a two-sided Wilcoxon signed-rank test (at least 5 patients). These contrasts are an scTCNA addition; the raw ratio against the pooled non-malignant compartment is also affected by its mixture of lineages, which is why single lineages are shown as well.</p>
+      <p>Each measure is tested against zero across patients with a two-sided Wilcoxon signed-rank test (at least 6 patients), with Benjamini-Hochberg q-values over all reference groups and measures of a cancer type. These contrasts are an scTCNA addition; the raw ratio against the pooled non-malignant compartment is also affected by its mixture of lineages, which is why single lineages are shown as well.</p>
     </section>
 
     <section class="card about-section">
@@ -117,8 +117,8 @@
       <table class="info-table">
         <thead><tr><th>Score</th><th>Definition</th><th>Reference</th></tr></thead>
         <tbody>
-          <tr><td>DEPTH</td><td><span class="formula">DEPTH<sub>s</sub> = SD<sub>g</sub>[ (x<sub>gs</sub> - &mu;<sub>g</sub><sup>ref</sup>)&sup2; ]</span><br><span class="small muted">SD across genes of the squared deviation from the reference mean; the reference is the mean over non-malignant cells (per cell) or non-malignant pseudo-bulks (per sample), which is why non-malignant pseudo-bulks have no DEPTH value.</span></td><td>DEPTH algorithm, WangX-Lab/DEPTH (Li M et al., <em>Commun Biol</em> 2020)</td></tr>
-          <tr><td>DEPTH2</td><td><span class="formula">DEPTH2<sub>s</sub> = SD<sub>g</sub>[ |z<sub>gs</sub>| ],&nbsp; z<sub>gs</sub> = (x<sub>gs</sub> - &mu;<sub>g</sub>) / &sigma;<sub>g</sub></span><br><span class="small muted">Genes z-scored across samples (sample SD; a constant gene gets z = 0 and still counts); the score is the SD across genes of |z|. No normal reference needed.</span></td><td>Song D, Wang X, <em>J Transl Med</em> 2022 (WangX-Lab/DEPTH2)</td></tr>
+          <tr><td>DEPTH</td><td><span class="formula">DEPTH<sub>s</sub> = SD<sub>g</sub>[ (x<sub>gs</sub> - &mu;<sub>g</sub><sup>ref</sup>)&sup2; ]</span><br><span class="small muted">SD across genes of the squared deviation from the reference mean. Only malignant cells (per cell) and malignant pseudo-bulks (per sample) are scored; the reference is the mean over the dataset's non-malignant cells or pseudo-bulks, so non-malignant profiles have no DEPTH value and DEPTH is not compared between compartments.</span></td><td>DEPTH algorithm, WangX-Lab/DEPTH (Li M et al., <em>Commun Biol</em> 2020)</td></tr>
+          <tr><td>DEPTH2</td><td><span class="formula">DEPTH2<sub>s</sub> = SD<sub>g</sub>[ |z<sub>gs</sub>| ],&nbsp; z<sub>gs</sub> = (x<sub>gs</sub> - &mu;<sub>g</sub>) / &sigma;<sub>g</sub></span><br><span class="small muted">Genes z-scored across samples (sample SD; a constant gene gets z = 0 and still counts); the score is the SD across genes of |z|. Per cell, the samples are the cells of the same patient and compartment, so the score measures how atypical a cell is within its own tumour (or the patient's non-malignant cells); per pseudo-bulk, the samples are all pseudo-bulks of the dataset.</span></td><td>Song D, Wang X, <em>J Transl Med</em> 2022 (WangX-Lab/DEPTH2)</td></tr>
         </tbody>
       </table>
     </section>

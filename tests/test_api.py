@@ -28,6 +28,7 @@ RANK_METRICS = [
 TOP_ROW_KEYS = {
     "gene",
     "value",
+    "value_q",
     "mean_malignant",
     "mean_non_malignant",
     "detection_rate_malignant",
@@ -311,15 +312,19 @@ def test_tumor_heterogeneity_cell_level(client, score):
     assert data["cancer_type"] == "SYN" and data["score"] == score and data["level"] == "cell"
     comps = data["compartments"]
     assert set(comps) == {"malignant", "non_malignant"}
-    for comp in comps.values():
-        assert 0 < len(comp["values"]) <= 5000
-        assert comp["n"] >= len(comp["values"])
-        assert comp["median"] is not None
+    scored = ["malignant", "non_malignant"] if score == "depth2" else ["malignant"]  # DEPTH: non-malignant cells are the reference
+    for name, comp in comps.items():
+        if name in scored:
+            assert 0 < len(comp["values"]) <= 5000
+            assert comp["n"] >= len(comp["values"])
+            assert comp["median"] is not None
+        else:
+            assert comp["values"] == [] and comp["n"] == 0 and comp["median"] is None
     assert len(data["patients"]) == 12
     assert set(data["patients"][0]) == {"patient", "compartment", "n_cells", "median"}
     test = data["paired_test"]
     assert set(test) == {"n_pairs", "median_diff", "p_value", "rank_biserial"}
-    assert test["n_pairs"] == 6
+    assert test["n_pairs"] == (6 if score == "depth2" else 0)
     assert_finite(data)
     # deterministic subsample: identical bodies on repeat
     assert client.get("/api/cancer-types/SYN/tumor-heterogeneity", params={"score": score, "level": "cell"}).json() == data
@@ -357,8 +362,6 @@ def test_tumor_heterogeneity_summary(client):
         "depth2_cell_p",
         "depth2_pseudobulk_median_diff",
         "depth2_pseudobulk_p",
-        "depth_cell_median_diff",
-        "depth_cell_p",
     }
     assert set(rows[0]) == expected
     assert rows[1]["depth2_cell_median_malignant"] is not None
@@ -396,7 +399,7 @@ def test_download_scores(client):
 
 def test_download_top_genes(client):
     lines = _csv(client.get("/api/download/top_genes.csv", params={"cancer_type": "SYN", "metric": "log2fc_cv_median", "n": 7}))
-    assert lines[0].startswith("gene,value,mean_malignant,") and len(lines) == 8
+    assert lines[0].startswith("gene,value,value_q,mean_malignant,") and len(lines) == 8
     assert client.get("/api/download/top_genes.csv", params={"metric": "log2fc_cv_median"}).status_code == 422
     assert client.get("/api/download/top_genes.csv", params={"cancer_type": "SYN"}).status_code == 422
     assert client.get("/api/download/top_genes.csv", params={"cancer_type": "SYN", "metric": "bogus"}).status_code == 400
