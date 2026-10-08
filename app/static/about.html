@@ -33,7 +33,7 @@
     <section class="card about-section">
       <h2>What scTCNA is</h2>
       <p>TCNA (Shah et al., <em>J Mol Biol</em> 2026) quantifies transcriptional noise in bulk RNA-seq by comparing primary tumours with solid-tissue normals across patients. scTCNA applies the same vocabulary to droplet single-cell RNA-seq: for every gene, noise is measured across the cells of one patient, separately for the <strong>Malignant</strong> compartment (cells called malignant by the atlas) and the <strong>Non-malignant</strong> compartment (all curated non-malignant lineages pooled), and the two are compared <em>within</em> each patient. Cancer-type values are medians across patients; every test is paired across patients.</p>
-      <p>The app has four dashboards mirroring TCNA: <a href="index.html">Gene Noise Analysis</a> (one gene across cancers, or a gene list within one cancer, with per-patient and per-cell-type detail), <a href="top-genes.html">Top genes</a> (ranked lists per cancer type), <a href="tumor.html">Tumor Heterogeneity</a> (DEPTH and DEPTH2) and a cross-cancer <a href="heatmap.html">Heatmap</a>. Every table can be downloaded as CSV and every plot as PNG (camera icon in the plot toolbar); the JSON API is listed at the bottom of this page.</p>
+      <p>The app has the dashboards of TCNA plus a summary view: <a href="index.html">Gene Noise Analysis</a> (one gene across cancers, or a gene list within one cancer, with per-patient and per-cell-type detail), <a href="top-genes.html">Top genes</a> (ranked lists per cancer type), <a href="tumor.html">Tumor Heterogeneity</a> (DEPTH and DEPTH2), a cross-cancer <a href="heatmap.html">Heatmap</a> and the <a href="summary.html">Cross-cancer summary</a> (is malignant-cell noise higher, patient by patient?). Every table can be downloaded as CSV and every plot as PNG (camera icon in the plot toolbar); the JSON API is listed at the bottom of this page.</p>
     </section>
 
     <section class="card about-section">
@@ -95,9 +95,20 @@
       <ul>
         <li>Per gene and cancer type, the per-patient D<sub>gp</sub> (at least 5 patients with both compartments) are tested with a two-sided Wilcoxon signed-rank test (zero differences discarded).</li>
         <li>Effect sizes: the median per-patient log2 ratio and the matched-pairs rank-biserial correlation <span class="formula">r = (R<sup>+</sup> - R<sup>-</sup>) / (R<sup>+</sup> + R<sup>-</sup>)</span> (+1 when every patient is noisier in malignant cells).</li>
-        <li>Benjamini-Hochberg q-values per cancer type over all tested genes; q &lt; 0.05 is highlighted in the plots.</li>
+        <li>Benjamini-Hochberg q-values per cancer type over the expressed genes that were tested; q &lt; 0.05 is highlighted in the plots.</li>
         <li>The same paired test (at least 3 patients) compares the per-patient DEPTH / DEPTH2 medians and pseudo-bulk scores between compartments.</li>
       </ul>
+    </section>
+
+    <section class="card about-section">
+      <h2>Malignant versus non-malignant noise, patient by patient</h2>
+      <p>The per-gene comparison above asks <em>which genes</em> differ. The <a href="summary.html">Cross-cancer summary</a> asks whether malignant cells are noisier <em>overall</em>. For every patient and every reference group (all non-malignant cells, or one non-malignant lineage with at least 50 cells), genes detected in at least 10% of cells of both groups are compared and the median over genes is kept, giving one number per patient:</p>
+      <ul>
+        <li><strong>log2 CV ratio (raw)</strong>: median over genes of log2(CV<sub>mal</sub>/CV<sub>ref</sub>), TCNA Eq. 1.</li>
+        <li><strong>log2 CV ratio (depth-matched)</strong>: the same after downsampling every cell to the common UMI depth, so that deeper-sequenced cells do not look less noisy.</li>
+        <li><strong>Excess noise</strong>: median over genes of log10(CV&sup2;<sub>mal</sub>) minus the reference group's LOWESS mean-CV&sup2; trend evaluated at the malignant gene's mean (depth-matched; genes outside the reference's expression range are skipped). It removes both the mean dependence of CV and the depth difference.</li>
+      </ul>
+      <p>Each measure is tested against zero across patients with a two-sided Wilcoxon signed-rank test (at least 5 patients). These contrasts are an scTCNA addition; the raw ratio against the pooled non-malignant compartment is also affected by its mixture of lineages, which is why single lineages are shown as well.</p>
     </section>
 
     <section class="card about-section">
@@ -133,8 +144,9 @@
         <li><code>/api/genes/search?q=&amp;limit=</code>, <code>/api/genes/{gene}</code>, <code>/api/genes/{gene}/patients?cancer_type=</code>, <code>/api/genes/{gene}/celltypes?cancer_type=</code></li>
         <li><code>/api/cancer-types/{ct}/top-genes?metric=&amp;direction=&amp;n=&amp;expressed_only=</code>, <code>/api/cancer-types/{ct}/comparison?metric=</code></li>
         <li><code>/api/cancer-types/{ct}/tumor-heterogeneity?score=&amp;level=</code>, <code>/api/tumor-heterogeneity/summary</code></li>
+        <li><code>/api/noise-contrasts?cancer_type=</code>, <code>/api/cancer-types/{ct}/noise-contrasts</code></li>
         <li><code>/api/heatmap?genes=&amp;metric=&amp;expressed_only=</code></li>
-        <li><code>/api/download/{gene_summary|top_genes|sample_scores|cell_scores|datasets|gene_patients|heatmap}.csv</code></li>
+        <li><code>/api/download/{gene_summary|top_genes|sample_scores|cell_scores|datasets|gene_patients|heatmap|noise_contrasts}.csv</code></li>
       </ul>
     </section>
 
@@ -145,7 +157,7 @@
         <li>Gavish A, Tyler M, Greenwald AC, et al. Hallmarks of transcriptional intratumour heterogeneity across a thousand tumours. <em>Nature</em> 618, 598-606 (2023). 3CA: <a href="https://www.weizmann.ac.il/sites/3CA/">https://www.weizmann.ac.il/sites/3CA/</a></li>
         <li>Han Y, Wang Y, Dong X, et al. TISCH2: expanded datasets and new tools for single-cell transcriptome analyses of the tumor microenvironment. <em>Nucleic Acids Res</em> 51, D1425-D1431 (2023). <a href="https://tisch.compbio.cn/">https://tisch.compbio.cn/</a></li>
         <li>Li M, Zhang Z, Li L, Wang X. An algorithm to quantify intratumor heterogeneity based on alterations of gene expression profiles. <em>Commun Biol</em> 3, 505 (2020). The DEPTH algorithm from the WangX-Lab/DEPTH package: <a href="https://github.com/WangX-Lab/DEPTH">https://github.com/WangX-Lab/DEPTH</a></li>
-        <li>Song D, Wang X. DEPTH2: an mRNA-based algorithm to evaluate intratumor heterogeneity without reference to normal controls. <em>J Transl Med</em> 20, 369 (2022). <a href="https://github.com/WangX-Lab/DEPTH2">https://github.com/WangX-Lab/DEPTH2</a></li>
+        <li>Song D, Wang X. DEPTH2: an mRNA-based algorithm to evaluate intratumor heterogeneity without reference to normal controls. <em>J Transl Med</em> 20, 150 (2022). <a href="https://github.com/WangX-Lab/DEPTH2">https://github.com/WangX-Lab/DEPTH2</a></li>
         <li>Wolf FA, Angerer P, Theis FJ. SCANPY: large-scale single-cell gene expression data analysis. <em>Genome Biol</em> 19, 15 (2018).</li>
         <li>Wolock SL, Lopez R, Klein AM. Scrublet: computational identification of cell doublets in single-cell transcriptomic data. <em>Cell Syst</em> 8, 281-291 (2019).</li>
         <li>Brennecke P, Anders S, Kim JK, et al. Accounting for technical noise in single-cell RNA-seq experiments. <em>Nat Methods</em> 10, 1093-1095 (2013).</li>
