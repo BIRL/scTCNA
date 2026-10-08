@@ -146,9 +146,11 @@
     });
     App.renderTable('pan-table', App.columns(SUMMARY_KEYS), rows, { sortKey: 'cancer_type', sortDir: 'asc' });
 
-    // per-patient detail: keep the chosen cancer when the new gene has it, else the first
+    // per-patient detail: keep the chosen cancer when the new gene has it, else the first cancer where the gene
+    // is expressed (per-patient tables only hold expressed genes), else the first one
     const available = rows.map((r) => r.cancer_type);
-    const keep = available.includes(state.detailCancer) ? state.detailCancer : available[0];
+    const expressedIn = rows.filter((r) => r.expressed).map((r) => r.cancer_type);
+    const keep = available.includes(state.detailCancer) ? state.detailCancer : expressedIn[0] || available[0];
     App.fillCancerSelect('detail-cancer', rows.map((r) => ({ cancer_type: r.cancer_type, cancer_name: r.cancer_name })), keep);
     selectDetailCancer(keep);
   }

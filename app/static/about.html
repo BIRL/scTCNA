@@ -129,9 +129,9 @@
         <li>Tumour vs normal is replaced by malignant vs non-malignant cells of the same patient; the non-malignant compartment is a mixture of lineages (immune, stromal, normal epithelium), so composition differences between patients contribute to its noise. The per-cell-type view lets malignant cells be compared with one matched lineage.</li>
         <li>One study per cancer type: cancer-type and study effects cannot be separated, and cross-cancer comparisons (heatmap) are confounded by study design, tissue handling and sequencing depth. All tests are within study and within patient.</li>
         <li>Malignant calls come from the atlas (inferred copy-number aberrations) and are not re-derived; unassigned cells are excluded.</li>
-        <li>The melanoma study consists of metastases only; the per-patient cell cap and uniform QC mean cell numbers differ from the original publications.</li>
+        <li>The melanoma study consists of metastases only. The liver dataset (Ma et al. 2019) mixes hepatocellular carcinoma and intrahepatic cholangiocarcinoma, as TCNA's Liver site does, and is small (6 paired patients); Sun et al. 2021 was not used because 3CA provides it only as normalised TPM values. The per-patient cell cap and uniform QC mean cell numbers differ from the original publications.</li>
         <li>Dropout and zero inflation inflate CV and MAD for lowly expressed genes; read the mean-corrected and depth-downsampled values alongside the raw metrics.</li>
-        <li>Statistical power is limited by the number of patients with both compartments (roughly 8-27 per cancer type).</li>
+        <li>Statistical power is limited by the number of patients with both compartments (6-27 per cancer type).</li>
         <li>TCNA's pathway (STRING enrichment) dashboard is not replicated and there is no custom data upload. Only 10x UMI data are used.</li>
       </ul>
     </section>
