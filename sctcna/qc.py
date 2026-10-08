@@ -87,7 +87,7 @@ def common_depth_target(n_counts: np.ndarray, quantile: float = 0.1, min_depth: 
 
 def downsample_counts(counts: sp.spmatrix, target: int, seed: int = 0) -> sp.csr_matrix:
     """Downsample every cell with more than ``target`` counts to exactly ``target`` (cells below are unchanged)."""
-    tmp = ad.AnnData(X=sp.csr_matrix(counts, dtype=np.float32))
+    tmp = ad.AnnData(X=sp.csr_matrix(counts, dtype=np.float32, copy=True))  # copy: scanpy edits the matrix in place
     sc.pp.downsample_counts(tmp, counts_per_cell=target, random_state=seed, replace=False)
     out = sp.csr_matrix(tmp.X, dtype=np.int32)
     out.eliminate_zeros()

@@ -30,7 +30,7 @@ from scipy import stats as sps
 from . import __version__
 from .depth import depth2_matrix, depth2_per_cell, depth_matrix, depth_per_cell, gene_mean_sd, pseudobulk_log_cpm
 from .io import MALIGNANT, NON_MALIGNANT
-from .metrics import gene_noise_table, log2_fold_change, mean_trend_residual
+from .metrics import METRIC_COLUMNS, gene_noise_table, log2_fold_change, mean_trend_residual
 from .normalize import log2p1, normalize_cp10k, select_columns
 from .qc import add_qc_metrics, common_depth_target, downsample_counts, filter_cells, filter_genes, run_scrublet
 from .stats import compartment_medians, paired_noise_tests, paired_score_test
@@ -78,7 +78,7 @@ def _metrics_for_groups(norm: sp.csr_matrix, groups: pd.core.groupby.DataFrameGr
             t[k] = v
         frames.append(t)
     if not frames:
-        return pd.DataFrame(columns=["gene", *keys])
+        return pd.DataFrame(columns=["gene", *METRIC_COLUMNS, "cv2_resid", *keys])
     return pd.concat(frames, ignore_index=True)
 
 

@@ -32,7 +32,7 @@ METRIC_COLUMNS = ["n_cells", "mean", "detection_rate", "sd", "var", "cv", "cv2",
 
 
 def _as_csr(X) -> sp.csr_matrix:
-    X = sp.csr_matrix(X, dtype=np.float64)
+    X = sp.csr_matrix(X, dtype=np.float64, copy=True)  # copy: eliminate_zeros() must not touch the caller's matrix
     X.sum_duplicates()
     X.eliminate_zeros()
     return X
@@ -120,9 +120,8 @@ def mean_trend_residual(mean: np.ndarray, cv2: np.ndarray, frac: float = 0.3, mi
 
 def log2_fold_change(numerator, denominator) -> np.ndarray:
     """TCNA Eq. 1: log2(noise_tumour / noise_normal); NaN where either side is not positive."""
-    a = np.asarray(numerator, dtype=float)
-    b = np.asarray(denominator, dtype=float)
-    out = np.full(np.broadcast(a, b).shape, np.nan)
+    a, b = np.broadcast_arrays(np.asarray(numerator, dtype=float), np.asarray(denominator, dtype=float))
+    out = np.full(a.shape, np.nan)
     ok = np.isfinite(a) & np.isfinite(b) & (a > 0) & (b > 0)
     out[ok] = np.log2(a[ok] / b[ok])
     return out

@@ -50,10 +50,12 @@ def depth2_per_cell(X: sp.spmatrix, mean: np.ndarray | None = None, sd: np.ndarr
     Genes are z-scored across the rows of ``X`` unless ``mean``/``sd`` are given
     (e.g. computed on a larger reference set).
     """
-    X = sp.csr_matrix(X, dtype=np.float64)
+    X = sp.csr_matrix(X, dtype=np.float64, copy=True)
     X.eliminate_zeros()
     n, g = X.shape
     if mean is None or sd is None:
+        if n < 2:  # z-scores need at least two samples; the score is undefined
+            return np.full(n, np.nan)
         mean, sd = gene_mean_sd(X)
     valid = np.isfinite(sd) & (sd > 0)
     sd_safe = np.where(valid, sd, 1.0)
@@ -69,7 +71,7 @@ def depth2_per_cell(X: sp.spmatrix, mean: np.ndarray | None = None, sd: np.ndarr
 
 def depth_per_cell(X: sp.spmatrix, reference_mean: np.ndarray) -> np.ndarray:
     """DEPTH score of every row (cell): SD across genes of (x_g - reference_mean_g)^2."""
-    X = sp.csr_matrix(X, dtype=np.float64)
+    X = sp.csr_matrix(X, dtype=np.float64, copy=True)
     X.eliminate_zeros()
     n, g = X.shape
     m = np.asarray(reference_mean, dtype=np.float64)
@@ -87,8 +89,10 @@ def depth_per_cell(X: sp.spmatrix, reference_mean: np.ndarray) -> np.ndarray:
 def depth2_matrix(expr: pd.DataFrame) -> pd.Series:
     """Reference (dense) DEPTH2 on a genes x samples table, replicating the R package."""
     M = expr.to_numpy(dtype=np.float64)
+    if M.shape[1] < 2:
+        return pd.Series(np.nan, index=expr.columns, name="DEPTH2")
     mean = M.mean(axis=1, keepdims=True)
-    sd = M.std(axis=1, ddof=1, keepdims=True) if M.shape[1] > 1 else np.full_like(mean, np.nan)
+    sd = M.std(axis=1, ddof=1, keepdims=True)
     with np.errstate(divide="ignore", invalid="ignore"):
         z = np.abs((M - mean) / sd)
     z[~np.isfinite(z)] = 0.0
