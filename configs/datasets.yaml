@@ -94,8 +94,24 @@ datasets:
     meta_url: "https://www.dropbox.com/scl/fi/it3075pqkbco9ocrihmps/Meta-data_Wang2019_Brain.tar.gz?rlkey=pg8kco2i0o5huju9w1ypf45ta&dl=1"
     archive: Data_Wang2019_Brain.tar.gz
 
-  - id: LIHC_Sun2021
+  - id: LIHC_Ma2019
     enabled: true
+    source: 3CA
+    cancer_type: LIHC
+    cancer_name: Liver cancer (HCC and iCCA)
+    tcna_site: Liver
+    study: Ma et al. 2019
+    citation: "Ma L et al. Tumor cell biodiversity drives microenvironmental reprogramming in liver cancer. Cancer Cell 36, 418-430 (2019)."
+    technology: 10x
+    site: primary
+    data_url: "https://www.dropbox.com/scl/fi/vi8969rnsgxb7o2a0mr31/Data_Ma2019_Liver-Biliary.tar.gz?rlkey=0okv3bqvggk1bi6l7ov014qfv&dl=1"
+    meta_url: "https://www.dropbox.com/scl/fi/yyly3rqx2e71vu8n0nx07/Meta-data_Ma2019_Liver-Biliary.tar.gz?rlkey=v31r6l7xw2izkxb26ofx3cf9c&dl=1"
+    archive: Data_Ma2019_Liver-Biliary.tar.gz
+    notes: "Hepatocellular carcinoma and intrahepatic cholangiocarcinoma, as in TCNA's Liver site (TCGA-LIHC and TCGA-CHOL). Replaces Sun et al. 2021, for which 3CA provides only normalised TPM values."
+
+  - id: LIHC_Sun2021
+    enabled: false
+    notes: "Disabled: the 3CA bundle holds Exp_data_TPM.mtx (normalised values), not UMI counts."
     source: 3CA
     cancer_type: LIHC
     cancer_name: Hepatocellular carcinoma
