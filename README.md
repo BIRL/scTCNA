@@ -152,19 +152,23 @@ Single-lineage references with >= 6 patients (median excess noise of malignant c
 1. With TCNA's raw measure (Eq. 1 per patient), malignant cells look less noisy than the
    pooled non-malignant cells in all ten cancer types (significant in nine); thousands of
    genes per cancer reach q < 0.05, almost all in that direction.
-2. Most of that gap is technical: after downsampling every cell to the same UMI depth the
-   median CV ratio is close to zero (significant in two cancer types only). Malignant cells
-   carry more UMIs, which lowers their sampling noise.
+2. Most of that gap appears to track sequencing depth. Malignant cells have more UMIs per
+   cell than non-malignant cells in 134 of 138 patients, and after downsampling every cell
+   to the same depth the median CV ratio lies within ±0.1 in nine of ten cancer types
+   (LIHC +0.12 with 6 patients; still significant in LUAD and COAD). Whether the higher
+   depth is technical or reflects more mRNA per malignant cell cannot be told apart here.
 3. Controlling for both depth and mean expression, malignant cells are slightly *less*
    variable than non-malignant cells at the same expression level in nine of ten cancer
    types (q < 0.05; median excess -0.01 to -0.06 log10 CV², GBM not significant). Against
    single lineages the deficit is largest for T, B and myeloid cells and near zero for
    fibroblasts, endothelial and normal epithelial cells.
-4. Within a tumour, malignant cells are less heterogeneous than the patient's non-malignant
-   cells (per-cell DEPTH2 lower in nine of ten, p < 0.05 in six), but malignant pseudo-bulks
-   differ more between patients (pseudo-bulk DEPTH2 higher in nine of ten, p < 0.05 in five). The tumour-specific
-   variability that bulk TCNA captures is therefore mostly between patients, not within a
-   tumour's malignant cells.
+4. Per-cell DEPTH2 is lower in malignant cells than in the patient's pooled non-malignant
+   cells in nine of ten cancer types (p < 0.05 in six); the non-malignant group mixes several
+   lineages, which raises its within-group heterogeneity. Pseudo-bulk DEPTH2 is higher for
+   malignant profiles in nine of ten (p < 0.05 in five), i.e. malignant profiles differ more
+   between patients. This is consistent with between-patient differences contributing much
+   of the tumour heterogeneity seen in bulk data, but scTCNA was not compared with TCNA's
+   bulk scores directly.
 5. Genes most often noisier in malignant cells across cancers include MALAT1, HLA-B, VIM,
    S100A4, ARHGDIB and DUSP2 (q < 0.05 in five to seven cancer types).
 
