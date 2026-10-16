@@ -38,7 +38,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["sctcna", "sctcna.web", "app"]
+packages = ["sctcna", "sctcna.web"]  # app/ (the standalone server) runs from the repository, it is not installed
 
 [tool.ruff]
 line-length = 180
