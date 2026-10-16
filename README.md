@@ -290,6 +290,20 @@ API endpoints:
 | `GET /api/cancer-types/{ct}/noise-contrasts` | the same with per-patient values |
 | `GET /api/download/{table}.csv` | CSV export of a served table |
 
+### Embedding the API in another FastAPI application
+
+The API is also importable on its own, without the pipeline stack. `sctcna.web.create_api`
+returns a FastAPI application that another server can mount at any prefix; the TCNA portal
+serves it at `/api/sc`:
+
+```python
+from sctcna.web import create_api
+portal.mount("/api/sc", create_api("/path/to/data/app"))
+```
+
+It needs only pandas (2.2 or 3.x), numpy, pyarrow and FastAPI, so it can be installed into
+another environment with `pip install --no-deps <path to this repository>`.
+
 ## Run the tests
 
 ```bash

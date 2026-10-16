@@ -38,7 +38,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["sctcna", "app"]
+packages = ["sctcna", "sctcna.web", "app"]
 
 [tool.ruff]
 line-length = 180

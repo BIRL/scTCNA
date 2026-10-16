@@ -1,4 +1,4 @@
-"""JSON API routes and CSV downloads.
+"""JSON API routes and CSV downloads (paths are relative to where the API is mounted).
 
 Every JSON body goes through ``clean`` so NaN/inf and numpy scalars never reach
 the client; ``json.dumps(allow_nan=False)`` then guarantees a hard failure
@@ -19,7 +19,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from .store import Store
 
-router = APIRouter(prefix="/api")
+router = APIRouter()  # mounted at /api by app.main, or at another prefix (e.g. /api/sc) by a host application
 
 CSV_TABLES = ("gene_summary", "top_genes", "sample_scores", "cell_scores", "datasets", "gene_patients", "heatmap", "noise_contrasts")
 
