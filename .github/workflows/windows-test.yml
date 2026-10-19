@@ -1,0 +1,92 @@
+# Windows check of the TCNA portal with single-cell mode, as deployed on Windows Server:
+# builds the sctcna wheel and data zip, runs TCNA's windows/setup.ps1 and the backend
+# tests, starts run.ps1 and checks /api/sc/health, then builds the frontend with npm.
+# TCNA comes from the public fork, so no secrets are needed.
+name: windows-test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tcna_ref:
+        description: Branch of sabasiddique1/TCNA to test
+        default: single-cell-mode
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: sctcna
+
+      - uses: actions/checkout@v4
+        with:
+          repository: sabasiddique1/TCNA
+          ref: ${{ inputs.tcna_ref || 'single-cell-mode' }}
+          path: TCNA
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the sctcna wheel and the data zip
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m pip wheel --no-deps --wheel-dir dist .\sctcna
+          Compress-Archive -Path sctcna\data\app\* -DestinationPath dist\sctcna-data-app.zip
+          Get-ChildItem dist
+
+      # Windows PowerShell 5.1, the shell of Windows Server 2019
+      - name: setup.ps1
+        shell: powershell
+        run: |
+          $wheel = (Get-ChildItem dist\sctcna-*.whl).FullName
+          .\TCNA\Deployed_Server\windows\setup.ps1 -Wheel $wheel -DataZip dist\sctcna-data-app.zip -DataDir "$env:RUNNER_TEMP\sctcna-data" -Python (Get-Command python).Source
+
+      - name: Backend tests
+        shell: pwsh
+        working-directory: TCNA/Deployed_Server/backend
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          .\scripts\env\Scripts\python.exe -m pip install --disable-pip-version-check -r requirements-dev.txt
+          .\scripts\env\Scripts\python.exe -m pytest
+
+      - name: run.ps1 serves the single-cell tables
+        shell: powershell
+        run: |
+          $log = "$env:RUNNER_TEMP\backend.log"
+          $proc = Start-Process powershell -PassThru -RedirectStandardOutput $log -RedirectStandardError "$log.err" -ArgumentList @(
+              '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'TCNA\Deployed_Server\windows\run.ps1', '-DataDir', "$env:RUNNER_TEMP\sctcna-data")
+          $health = $null
+          $answer = $null
+          for ($i = 0; $i -lt 90 -and -not $health; $i++) {
+              Start-Sleep -Seconds 2
+              try { $health = Invoke-RestMethod http://127.0.0.1:5001/api/sc/health -TimeoutSec 5 }
+              catch {
+                  # the tables load before the server listens, so an HTTP error answer is final
+                  if ($_.Exception.Response) { $answer = "HTTP $([int]$_.Exception.Response.StatusCode): $($_.ErrorDetails.Message)"; break }
+              }
+          }
+          taskkill /PID $proc.Id /T /F | Out-Null
+          Get-Content $log, "$log.err" -ErrorAction SilentlyContinue | Select-Object -Last 30
+          if (-not $health) { if ($answer) { throw "/api/sc/health answered $answer" } else { throw 'no answer from /api/sc/health within 3 minutes' } }
+          $health | ConvertTo-Json -Compress
+          if ($health.status -ne 'ok' -or $health.n_datasets -ne 10) { throw 'unexpected /api/sc/health answer' }
+          # taskkill can report a child that had already exited; the checks above decide
+          exit 0
+
+      - name: Frontend build
+        shell: pwsh
+        working-directory: TCNA/Deployed_Server
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm ci --no-audit --no-fund
+          npm run build
