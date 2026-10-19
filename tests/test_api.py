@@ -90,7 +90,6 @@ def a_gene(client):
     return rows[0]["gene"]
 
 
-# ------------------------------------------------------------------ health / overview
 def test_health(client):
     data = body(client.get("/api/health"))
     assert data["status"] == "ok"
@@ -132,7 +131,6 @@ def test_datasets(client):
     assert_finite(rows)
 
 
-# ------------------------------------------------------------------ genes
 def test_gene_search(client):
     data = body(client.get("/api/genes/search", params={"q": "pois", "limit": 5}))
     assert data["query"] == "pois"
@@ -209,7 +207,6 @@ def test_gene_celltypes(client, a_gene):
     assert client.get("/api/genes/NOSUCHGENE/celltypes", params={"cancer_type": "SYN"}).status_code == 404
 
 
-# ------------------------------------------------------------------ top genes
 @pytest.mark.parametrize("metric", RANK_METRICS)
 def test_top_genes_every_metric(client, metric):
     data = body(client.get("/api/cancer-types/SYN/top-genes", params={"metric": metric, "n": 10}))
@@ -241,7 +238,6 @@ def test_top_genes_errors(client):
     assert client.get("/api/cancer-types/SYN/top-genes").status_code == 422
 
 
-# ------------------------------------------------------------------ comparison
 @pytest.mark.parametrize("metric", ["cv", "mad", "fano", "cv2_resid", "sd"])
 def test_comparison(client, metric):
     data = body(client.get("/api/cancer-types/SYN/comparison", params={"metric": metric}))
@@ -270,7 +266,6 @@ def test_comparison_errors(client):
     assert a == b
 
 
-# ------------------------------------------------------------------ heatmap
 def test_heatmap(client):
     data = body(client.get("/api/heatmap", params={"genes": "od30, pois100\nNOISY10 CONST0 od30 NOPE1", "metric": "log2fc_cv_median"}))
     assert data["metric"] == "log2fc_cv_median"
@@ -305,7 +300,6 @@ def test_heatmap_errors(client):
     assert client.get("/api/heatmap", params={"genes": at_limit, "metric": "log2fc_cv_median"}).status_code == 200
 
 
-# ------------------------------------------------------------------ tumour heterogeneity
 @pytest.mark.parametrize("score", ["depth2", "depth"])
 def test_tumor_heterogeneity_cell_level(client, score):
     data = body(client.get("/api/cancer-types/SYN/tumor-heterogeneity", params={"score": score, "level": "cell"}))
@@ -368,7 +362,6 @@ def test_tumor_heterogeneity_summary(client):
     assert_finite(rows)
 
 
-# ------------------------------------------------------------------ downloads
 def _csv(response, status=200):
     assert response.status_code == status, response.text
     assert response.headers["content-type"].startswith("text/csv")
@@ -424,7 +417,6 @@ def test_download_unknown_table(client):
     assert "detail" in r.json()
 
 
-# ------------------------------------------------------------------ missing data directory
 def test_missing_data_dir_gives_503(tmp_path):
     client = TestClient(create_app(tmp_path / "does-not-exist"))
     health = body(client.get("/api/health"), status=503)  # a host health check must fail without tables
@@ -445,7 +437,6 @@ def test_module_level_app_survives_missing_dir(monkeypatch, tmp_path):
     assert TestClient(reloaded.app).get("/api/health").json()["status"] == "no-data"
 
 
-# ------------------------------------------------------------------ noise contrasts
 def test_noise_contrasts_all_and_filtered(client):
     rows = body(client.get("/api/noise-contrasts"))["rows"]
     assert {r["cancer_type"] for r in rows} == {"SYN", "SY2"}

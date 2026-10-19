@@ -134,10 +134,8 @@ between raw and depth-downsampled per-patient CVs (all genes and groups).
 | PDAC | -0.039 (2.1e-04) | 0.141 (3.1e-05) | 0.96 |
 | SKCM | -0.022 (1.2e-01) | 0.021 (1.3e-01) | 0.96 |
 
-**Malignant cells against single non-malignant lineages** (depth-matched excess noise,
-lineages with >= 6 patients):
-
-Single-lineage references with >= 6 patients (median excess noise of malignant cells, log10 CV²; q):
+**Malignant cells against single non-malignant lineages** with >= 6 patients (median
+depth-matched excess noise of malignant cells, log10 CV²; q):
 - BRCA: B_cell -0.019 (8.8e-02); Endothelial -0.004 (1.5e-01); Fibroblast -0.005 (3.1e-02); Macrophage -0.006 (5.2e-02); Monocyte -0.000 (1.0e+00); NK_cell -0.003 (6.2e-01); Pericyte -0.006 (1.0e-01); Plasmablast -0.037 (8.8e-02); T_cell -0.018 (1.4e-03)
 - COAD: B_cell -0.046 (9.8e-03); Fibroblast -0.006 (9.8e-03); Macrophage -0.009 (9.8e-03); T_cell -0.039 (9.2e-04)
 - HNSC: B_cell -0.013 (4.8e-02); Endothelial +0.002 (6.3e-01); Fibroblast -0.002 (3.3e-01); Lymphovascular -0.005 (6.3e-01); Macrophage -0.017 (4.8e-02); T_cell -0.033 (1.9e-03)
@@ -321,8 +319,7 @@ The app is deployed as one free Docker web service on **Render** (512 MB RAM, no
 needed); `render.yaml` is the Blueprint. Push the repository to GitHub, then on
 <https://dashboard.render.com> choose **New > Blueprint**, pick the repository and click
 **Apply**. Step-by-step instructions, the memory measurement and troubleshooting are in
-[docs/DEPLOY.md](docs/DEPLOY.md). Hugging Face Docker Spaces were not used because
-creating one now requires a paid plan.
+[docs/DEPLOY.md](docs/DEPLOY.md).
 
 Locally:
 

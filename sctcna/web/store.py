@@ -1,11 +1,10 @@
 """In-memory access to the aggregated scTCNA app tables.
 
 A ``Store`` reads every Parquet table of an app data directory once (the
-tables are written by ``sctcna.pipeline.aggregate``), keeps a few lookup
-structures around and answers API questions with plain Python values.
-Request-time work is limited to filtering and sorting; the heavier views
-(compartment comparison, heatmap, tumour heterogeneity) are memoised per
-parameter combination because the tables never change while serving.
+tables are written by ``sctcna.pipeline.aggregate``). Request-time work is
+limited to filtering and sorting; the heavier views (heatmap, tumour
+heterogeneity) are memoised per parameter combination because the tables
+never change while serving.
 
 Validation problems are raised as ``NotFound`` / ``BadRequest`` so the web
 layer can map them to HTTP status codes without the store importing FastAPI.
@@ -218,7 +217,6 @@ class Store:
         self._cache: dict[tuple, Any] = {}
         self._lock = threading.Lock()
 
-    # ------------------------------------------------------------------ helpers
     def _memo(self, key: tuple, compute: Callable[[], Any], max_entries: int = MAX_CACHE_ENTRIES) -> Any:
         """Memoise ``compute()`` under ``key``; the oldest entry goes when the cache is full.
 
@@ -279,7 +277,6 @@ class Store:
         if metric not in RANK_METRICS:
             raise BadRequest(f"unknown metric: {metric}; expected one of {', '.join(RANK_METRICS)}")
 
-    # ------------------------------------------------------------------ overview
     def health(self) -> dict[str, Any]:
         return {"n_datasets": int(self.datasets["dataset"].nunique()), "n_genes": len(self._canonical), "build": self.build}
 
@@ -289,7 +286,6 @@ class Store:
     def dataset_rows(self) -> list[dict[str, Any]]:
         return _records(self.datasets)
 
-    # ------------------------------------------------------------------ genes
     def search_genes(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
         """Case-insensitive prefix matches; the exact symbol sorts first, then alphabetically."""
         key = q.strip().upper()
@@ -337,7 +333,6 @@ class Store:
         rows = self.celltype_summary.iloc[lo:hi].sort_values("cell_type")[CELLTYPE_ROW_COLUMNS]
         return {"gene": symbol, "cancer_type": cancer_type, "rows": _records(rows)}
 
-    # ------------------------------------------------------------------ per cancer type
     def top_genes(self, cancer_type: str, metric: str, direction: str = "noisy", n: int = 50, expressed_only: bool = True) -> dict[str, Any]:
         self._check_rank_metric(metric)
         if direction not in DIRECTIONS:
@@ -387,7 +382,6 @@ class Store:
             },
         }
 
-    # ------------------------------------------------------------------ heatmap
     @staticmethod
     def parse_gene_list(text: str) -> list[str]:
         """Split a user-supplied gene list on commas/whitespace, dropping case-insensitive duplicates."""
@@ -438,7 +432,6 @@ class Store:
 
         return self._memo(("heatmap", tuple(found), tuple(missing), metric, expressed_only), build)
 
-    # ------------------------------------------------------------------ tumour heterogeneity
     def tumor_heterogeneity(self, cancer_type: str, score: str = "depth2", level: str = "cell") -> dict[str, Any]:
         if score not in SCORES:
             raise BadRequest(f"unknown score: {score}; expected depth2 or depth")
@@ -478,7 +471,6 @@ class Store:
             return {"n_pairs": 0, "median_diff": float("nan"), "p_value": float("nan"), "rank_biserial": float("nan")}
         return {k: rec[k] for k in ("n_pairs", "median_diff", "p_value", "rank_biserial")}
 
-    # ------------------------------------------------------------------ noise contrasts
     def contrast_summary(self, cancer_type: str | None = None) -> dict[str, Any]:
         """Malignant vs reference-group noise contrasts (depth-matched, mean-corrected), one row per cancer type x reference."""
         df = self.noise_contrasts
@@ -525,7 +517,6 @@ class Store:
 
         return self._memo(("heterogeneity_summary",), build)
 
-    # ------------------------------------------------------------------ frames for CSV downloads
     def gene_summary_frame(self, cancer_type: str | None = None) -> pd.DataFrame:
         return self._cancer_summary(cancer_type, expressed_only=False) if cancer_type else self.gene_summary
 

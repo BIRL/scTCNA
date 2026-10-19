@@ -45,9 +45,6 @@ CELL_PATIENTS = ["PA", "PA", "PA", "PA", "PB", "PB", "PB"]
 CELL_COMPARTMENTS = [MALIGNANT, NON_MALIGNANT, UNASSIGNED, MALIGNANT, NON_MALIGNANT, MALIGNANT, MALIGNANT]
 
 
-# ---------------------------------------------------------------------------
-# 3CA
-# ---------------------------------------------------------------------------
 @pytest.fixture
 def counts_genes_by_cells() -> np.ndarray:
     rng = np.random.default_rng(11)
@@ -173,9 +170,6 @@ def _read_header(stream) -> tuple[int, int]:
     raise AssertionError("no dimension line")
 
 
-# ---------------------------------------------------------------------------
-# TISCH2
-# ---------------------------------------------------------------------------
 def _random_counts(rng: np.random.Generator, n_cells: int, n_genes: int) -> np.ndarray:
     """Random counts where every cell has at least one count of exactly 1, which the inversion is anchored on."""
     counts = rng.poisson(0.8, size=(n_cells, n_genes))
@@ -284,9 +278,6 @@ def test_recover_counts_flags_cells_without_a_unit_count():
     assert not np.array_equal(recovered.toarray()[0], counts[0])
 
 
-# ---------------------------------------------------------------------------
-# Dispatch
-# ---------------------------------------------------------------------------
 def test_load_dataset_prefers_cached_h5ad(tmp_path, bundle_3ca):
     raw = tmp_path / "raw"
     ds_dir = raw / "3ca" / "DS"

@@ -26,9 +26,6 @@ UNASSIGNED = "unassigned"
 OBS_COLUMNS = ["cell_name", "sample", "patient", "cell_type", "compartment", "dataset", "cancer_type"]
 
 
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
 def select_cells(obs: pd.DataFrame, max_cells_per_group: int | None, seed: int = 0) -> np.ndarray:
     """Boolean mask capping cells per (patient, compartment) group.
 
@@ -59,9 +56,6 @@ def _finalise(X: sp.csr_matrix, obs: pd.DataFrame, genes: list[str], dataset_id:
     return adata
 
 
-# ---------------------------------------------------------------------------
-# 3CA
-# ---------------------------------------------------------------------------
 def find_3ca_dir(study_dir: str | Path) -> Path:
     """Locate the folder holding the 3CA expression files (handles the nested tar layout)."""
     study_dir = Path(study_dir)
@@ -247,9 +241,6 @@ def load_3ca(
     return adata
 
 
-# ---------------------------------------------------------------------------
-# TISCH2
-# ---------------------------------------------------------------------------
 def recover_counts_from_lognorm(X: sp.csr_matrix, target_sum: float = 1e4, tol: float = 0.02) -> tuple[sp.csr_matrix, float]:
     """Invert Seurat-style log1p(counts / total * target_sum) normalisation.
 
@@ -326,9 +317,6 @@ def load_tisch2(
     return adata
 
 
-# ---------------------------------------------------------------------------
-# Dispatch
-# ---------------------------------------------------------------------------
 def load_dataset(entry: dict, raw_dir: str | Path, max_cells_per_group: int | None = None, seed: int = 0) -> ad.AnnData:
     """Load a registry entry from ``raw_dir/<source>/<id>/`` (or its cached .h5ad)."""
     raw_dir = Path(raw_dir)

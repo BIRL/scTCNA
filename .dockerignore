@@ -16,7 +16,6 @@ data/*
 *.mtx
 *.tar.gz
 
-# Tests, docs and tooling
 tests
 docs/*.docx
 node_modules
@@ -26,7 +25,6 @@ Makefile
 scripts
 docker-compose*.yml
 
-# Caches and editor files
 __pycache__
 *.py[cod]
 .pytest_cache

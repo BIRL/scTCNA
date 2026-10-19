@@ -23,7 +23,7 @@ COPY --chown=user:user sctcna/ ./sctcna/
 COPY --chown=user:user app/ ./app/
 COPY --chown=user:user configs/ ./configs/
 # Precomputed app tables. data/app must exist in the build context (committed
-# to git for Spaces builds); see docs/DEPLOY.md.
+# to git); see docs/DEPLOY.md.
 COPY --chown=user:user data/app/ ./data/app/
 
 # The system allocator returns freed Arrow buffers to the OS, which keeps resident memory low

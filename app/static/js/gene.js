@@ -1,5 +1,4 @@
-/* Gene Noise Analysis page: pan-cancer view of one gene, cancer-specific view of a gene
- * list, per-patient / per-cell-type detail and the sample-count overview. */
+/* Gene Noise Analysis page: pan-cancer and cancer-specific views with per-patient detail. */
 (function () {
   'use strict';
   const $ = App.$;
@@ -8,7 +7,7 @@
 
   const MAX_GENES = 50;
 
-  // gene_summary columns in display order (cancer first, then the metric blocks)
+  // gene_summary columns in display order
   const SUMMARY_KEYS = [
     'cancer_type', 'cancer_name', 'dataset', 'gene',
     'mean_malignant', 'mean_non_malignant', 'sd_malignant', 'sd_non_malignant',
@@ -47,7 +46,6 @@
     csCancer: null,
   };
 
-  // ------------------------------------------------------------------ helpers
   function pick(rows, key) {
     return rows.map((r) => (App.isNum(r[key]) ? r[key] : null));
   }
@@ -88,7 +86,6 @@
     );
   }
 
-  // ------------------------------------------------------------------ mode switch
   function setMode(mode) {
     state.mode = mode;
     $('mode-pan').checked = mode === 'pan';
@@ -99,7 +96,6 @@
     App.show('cancer-results', mode === 'cancer' && state.csRows.length > 0);
   }
 
-  // ------------------------------------------------------------------ pan-cancer
   async function runPan(gene) {
     gene = (gene || '').trim();
     if (!gene) return;
@@ -240,7 +236,6 @@
     App.renderTable('celltypes-table', App.columns(CELLTYPE_KEYS), sorted);
   }
 
-  // ------------------------------------------------------------------ cancer-specific
   async function runCancer(cancerType, genes) {
     App.clearError();
     if (!genes.length) {
@@ -297,7 +292,6 @@
     App.renderTable('cs-table', App.columns(['gene'].concat(SUMMARY_KEYS.filter((k) => k !== 'gene'))), rows, { sortKey: 'gene', sortDir: 'asc' });
   }
 
-  // ------------------------------------------------------------------ sample counts
   function renderSampleCounts(cancers) {
     const cats = cancers.map((c) => c.cancer_type);
     const names = cancers.map((c) => c.cancer_name || c.cancer_type);
@@ -321,7 +315,6 @@
     );
   }
 
-  // ------------------------------------------------------------------ wiring
   async function init() {
     document.querySelectorAll('input[name="mode"]').forEach((r) => r.addEventListener('change', () => setMode(r.value)));
 

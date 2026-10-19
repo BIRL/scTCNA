@@ -93,9 +93,6 @@ def _depth_gene_mask(adata, params: dict) -> np.ndarray:
     return detection >= params["depth"]["min_detection_rate_genes"]
 
 
-# ---------------------------------------------------------------------------
-# process_dataset + aggregate on the conftest fixtures
-# ---------------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def gene_summary(app_data_dir, synthetic_adata) -> pd.DataFrame:
     """Gene summary of the first dataset with the planted gene class and mean count of every gene."""
@@ -338,9 +335,6 @@ def test_celltype_summary(app_data_dir):
     assert np.isfinite(ct.loc[ct["mean"] > 0, ["cv", "fano"]].to_numpy()).all()
 
 
-# ---------------------------------------------------------------------------
-# process_dataset on its own and the command line
-# ---------------------------------------------------------------------------
 def _small_params(**overrides) -> dict:
     """Default parameters shrunk for a few dozen cells per group; every sample stays below the Scrublet minimum, so no doublet detection runs."""
     params = copy.deepcopy(load_config()["params"])

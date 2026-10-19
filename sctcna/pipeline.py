@@ -182,7 +182,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     qc, grp, norm_p, met_p, ds_p, depth_p = (params["qc"], params["groups"], params["normalisation"], params["metrics"], params["downsampling"], params["depth"])
     summary: dict = {"dataset": meta["id"], "cancer_type": meta["cancer_type"], "sctcna_version": __version__, "params": params}
 
-    # 1. QC -----------------------------------------------------------------
     # new AnnData with copied annotations; the count matrix is shared (it is only read, never modified in place)
     X_in = sp.csr_matrix(adata.X)
     if not np.issubdtype(X_in.dtype, np.integer) and not np.all(np.mod(X_in.data, 1) == 0):
@@ -197,7 +196,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
         adata, doublet_stats = run_scrublet(adata, "sample", qc["scrublet_min_cells_per_sample"], params["sampling"]["seed"])
     else:
         adata.obs["doublet_score"] = np.nan
-    # drop patient x compartment groups that are too small after QC
     sizes = adata.obs.groupby(["patient", "compartment"], observed=True)["cell_name"].transform("size")
     adata = adata[(sizes >= grp["min_cells_per_group"]).to_numpy()].copy()
     # per-cell totals over the genes that survived QC (used for the downsampling target and exported)
@@ -211,12 +209,10 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     summary["n_cells"] = {c: int(n) for c, n in adata.obs["compartment"].value_counts().items()}
     log.info("%s: %d cells, %d genes, %d patients after QC (%.0fs)", meta["id"], adata.n_obs, adata.n_vars, summary["n_patients"], time.time() - t0)
 
-    # 2. normalisation --------------------------------------------------------
     counts = sp.csr_matrix(adata.X)
     norm = normalize_cp10k(counts, norm_p["target_sum"])
     genes = adata.var_names.to_numpy()
 
-    # 3. per-gene metrics -------------------------------------------------------
     frac = met_p["lowess_frac"]
     by_pc = adata.obs.groupby(["patient", "compartment"], observed=True)
     per_patient = _metrics_for_groups(norm, by_pc, genes, grp["min_cells_per_group"], frac, ["patient", "compartment"])
@@ -228,7 +224,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     del norm
     gc.collect()
 
-    # 4. downsampled robustness check -----------------------------------------------
     if ds_p.get("enabled", True):
         target = common_depth_target(adata.obs["n_counts"].to_numpy(), ds_p["depth_quantile"], ds_p["min_depth"])
         counts_ds = downsample_counts(counts, target, params["sampling"]["seed"])
@@ -264,7 +259,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
         ["dataset", "cancer_type", "patient", "cell_type", "gene", "n_cells", "mean", "detection_rate", "sd", "cv", "cv2", "mad", "fano", "cv2_resid", "mean_ds", "cv_ds"]
     ]
 
-    # 5. DEPTH / DEPTH2 ---------------------------------------------------------------
     det = np.bincount(counts.indices, minlength=adata.n_vars) / adata.n_obs
     depth_genes = det >= depth_p["min_detection_rate_genes"]
     is_non_mal = (adata.obs["compartment"] == NON_MALIGNANT).to_numpy()
@@ -291,7 +285,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     pb_meta["depth_pseudobulk"] = d_tumour.reindex(pb.columns).to_numpy()
     if d_all is not None:
         pb_meta["depth_pseudobulk"] = d_all.reindex(pb.columns).to_numpy()
-    # per-patient medians of the per-cell scores
     cell_med = (
         cell_scores.groupby(["patient", "compartment"], observed=True)[["depth", "depth2"]]
         .median()
@@ -307,7 +300,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     for score in ("depth2_pseudobulk", "depth2_cell_median"):
         summary["depth"][f"paired_test_{score}"] = paired_score_test(sample_scores, score, min_patients=grp["min_patients_per_test"])
 
-    # 6. gene summary + paired tests -----------------------------------------------------
     medians = compartment_medians(per_patient)
     # Genes enter the paired tests (and hence the BH family) only when detected in >= min_detection_rate of
     # cells in both compartments (median across patients); noise of sporadically detected genes is unreliable.
@@ -347,7 +339,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
         "n_sig_q05_cv2_resid": int((sig["q_value_cv2_resid"] < 0.05).sum()),
     }
 
-    # 7. malignant vs non-malignant / single-lineage noise contrasts ------------------------
     contrast_patient, contrast_summary = noise_contrasts(per_patient, per_celltype, met_p["min_detection_rate"], frac, grp["min_patients_per_test"])
     for df in (contrast_patient, contrast_summary):
         df.insert(0, "cancer_type", meta["cancer_type"])
@@ -355,7 +346,6 @@ def process_dataset(adata: ad.AnnData, params: dict, meta: dict, out_dir: str | 
     allref = contrast_summary[contrast_summary["reference"] == NON_MALIGNANT]
     summary["contrast_vs_non_malignant"] = allref.drop(columns=["dataset", "cancer_type", "reference"]).iloc[0].to_dict() if len(allref) else {}
 
-    # write ----------------------------------------------------------------------------
     contrast_patient.to_parquet(out_dir / "noise_contrasts_patient.parquet", index=False, compression="zstd")
     contrast_summary.to_parquet(out_dir / "noise_contrasts.parquet", index=False, compression="zstd")
     per_patient.to_parquet(out_dir / "gene_metrics_patient.parquet", index=False, compression="zstd")

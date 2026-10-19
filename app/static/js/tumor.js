@@ -1,5 +1,4 @@
-/* Tumor Heterogeneity page: DEPTH / DEPTH2 per cell (violins) or per pseudo-bulk (paired
- * lines) for one cancer type, plus the cross-cancer summary. */
+/* Tumor Heterogeneity page: DEPTH / DEPTH2 per cell or per pseudo-bulk, plus the cross-cancer summary. */
 (function () {
   'use strict';
   const $ = App.$;

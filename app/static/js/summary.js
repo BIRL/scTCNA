@@ -1,5 +1,4 @@
-/* Cross-cancer summary: patient-level noise contrasts of malignant cells against all
- * non-malignant cells and against single lineages (GET /api/noise-contrasts). */
+/* Cross-cancer summary page: patient-level noise contrasts (GET /api/noise-contrasts). */
 (function () {
   'use strict';
   const $ = App.$;

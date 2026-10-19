@@ -89,7 +89,6 @@ def depth_scores_from_counts(
     def log_block(rows: np.ndarray) -> sp.csr_matrix:
         return select_columns(log2p1(normalize_cp10k(counts[rows], target_sum)), cols)
 
-    # reference mean, accumulated block by block
     r1 = np.zeros(cols.size)
     ref_idx = np.flatnonzero(ref)
     for a in range(0, ref_idx.size, CHUNK_ROWS):

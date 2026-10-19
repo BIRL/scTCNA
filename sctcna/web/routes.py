@@ -60,7 +60,6 @@ def get_store(request: Request) -> Store:
 StoreDep = Annotated[Store, Depends(get_store)]
 
 
-# ---------------------------------------------------------------------------- overview
 @router.api_route("/health", methods=["GET", "HEAD"])
 def health(request: Request) -> Response:
     """200 with build info when the tables are loaded; 503 otherwise, so a host's health check fails a deploy without data."""
@@ -80,7 +79,6 @@ def datasets(store: StoreDep) -> Response:
     return json_response(store.dataset_rows())
 
 
-# ---------------------------------------------------------------------------- genes
 @router.get("/genes/search")
 def search_genes(store: StoreDep, q: str = "", limit: Annotated[int, Query(ge=1, le=100)] = 20) -> Response:
     return json_response({"query": q, "results": store.search_genes(q, limit)})
@@ -101,7 +99,6 @@ def gene_celltypes(store: StoreDep, gene: str, cancer_type: str) -> Response:
     return json_response(store.gene_celltypes(gene, cancer_type))
 
 
-# ---------------------------------------------------------------------------- per cancer type
 @router.get("/cancer-types/{cancer_type}/top-genes")
 def top_genes(store: StoreDep, cancer_type: str, metric: str, direction: str = "noisy", n: Annotated[int, Query(ge=1, le=500)] = 50, expressed_only: bool = True) -> Response:
     return json_response(store.top_genes(cancer_type, metric, direction, n, expressed_only))
@@ -137,7 +134,6 @@ def noise_contrasts_patients(store: StoreDep, cancer_type: str) -> Response:
     return json_response(store.contrast_patients(cancer_type))
 
 
-# ---------------------------------------------------------------------------- downloads
 def _csv_chunks(df: pd.DataFrame, rows_per_chunk: int = 5_000) -> Iterator[str]:
     yield df.iloc[:0].to_csv(index=False)
     for start in range(0, len(df), rows_per_chunk):

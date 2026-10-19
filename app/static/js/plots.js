@@ -1,6 +1,4 @@
-/* Plotly helpers shared by the pages: one colour per compartment everywhere, a common
- * layout, and the plot types the dashboards use (grouped bars, paired patient lines,
- * violins, the cross-cancer heatmap). Exposed on window.Plots. */
+/* Plotly helpers shared by the pages (one colour per compartment everywhere), exposed on window.Plots. */
 (function (global) {
   'use strict';
 
@@ -58,7 +56,6 @@
     return Plotly.react(target, data, layout(layoutOver), config(filename));
   }
 
-  /* Clear a plot and show a short message in its place. */
   function empty(div, message) {
     const target = node(div);
     if (target.data) Plotly.purge(target);
@@ -70,7 +67,7 @@
     return values.map((v) => name + ': ' + App.fmt(v));
   }
 
-  /* Grouped bars, one trace per series: series = [{key, name, values, error, color, hover}]. */
+  /* series = [{key, name, values, error, color, hover}] */
   function groupedBars(div, categories, series, opts) {
     opts = opts || {};
     const data = series.map((s) => {
@@ -100,7 +97,6 @@
     );
   }
 
-  /* Single bar series with an explicit colour per bar (e.g. significant vs not). */
   function bars(div, categories, values, opts) {
     opts = opts || {};
     const data = [
@@ -135,9 +131,8 @@
     return draw(div, data, lay, opts.filename);
   }
 
-  /* One line per patient joining its Malignant and Non-malignant values (TCNA-style
-   * paired view). pairs = [{label, a, b}] with a = malignant, b = non-malignant; an optional
-   * second set (opts.overlay = {label, pairs}) is drawn dashed, e.g. the downsampled CV. */
+  /* TCNA-style paired view. pairs = [{label, a, b}] with a = malignant, b = non-malignant;
+   * opts.overlay = {label, pairs} is drawn dashed (e.g. the downsampled CV). */
   function pairedLines(div, pairs, opts) {
     opts = opts || {};
     const x = [LABELS.malignant, LABELS.non_malignant];
@@ -194,7 +189,6 @@
     );
   }
 
-  /* Violins of the per-cell values of each compartment with per-patient medians as dots. */
   function violins(div, groups, patients, opts) {
     opts = opts || {};
     const data = [];
@@ -253,7 +247,7 @@
     });
   }
 
-  /* Genes x cancer types heatmap; nulls stay blank. opts: {diverging, zscore, qValues, title}. */
+  /* Genes x cancer types; null cells stay blank. */
   function heatmap(div, genes, cancerTypes, values, opts) {
     opts = opts || {};
     const z = opts.zscore ? zscoreRows(values) : values;

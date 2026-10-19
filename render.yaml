@@ -5,8 +5,7 @@
 # (about a minute). The app only serves the precomputed Parquet tables in data/app,
 # which must be committed; peak memory with all ten cancer types is listed in docs/DEPLOY.md.
 #
-# Deploy: push the repository to GitHub, then on https://dashboard.render.com choose
-# New > Blueprint, pick the repository and click Apply. Render injects PORT itself.
+# Render injects PORT itself; deployment steps are in docs/DEPLOY.md.
 services:
   - type: web
     name: sctcna

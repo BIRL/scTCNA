@@ -1,6 +1,4 @@
-/* Shared helpers for every page: API calls with a loading bar and an error banner,
- * number formatting, sortable tables, CSV export, cancer-type selects and the gene
- * autocomplete. Everything is exposed on window.App. */
+/* Helpers shared by every page, exposed on window.App. */
 (function (global) {
   'use strict';
 
@@ -9,7 +7,6 @@
 
   const COMPARTMENT_LABEL = { malignant: 'Malignant', non_malignant: 'Non-malignant' };
 
-  // Human labels for every column that can show up in a table (gene_summary and friends).
   const COLUMN_LABELS = {
     dataset: 'Dataset',
     cancer_type: 'Cancer',
@@ -76,7 +73,7 @@
     median: 'Median',
   };
 
-  // Ranking metrics shared by the top-genes and heatmap pages (same vocabulary as the API).
+  // Shared by the top-genes and heatmap pages; keys are the API's metric names.
   const RANK_METRICS = [
     { key: 'log2fc_cv_median', label: 'Differential noise log2(CV Mal/CV Non-mal)', hasQ: true, diverging: true },
     { key: 'log2fc_mad_median', label: 'log2(MAD Mal/MAD Non-mal)', hasQ: true, diverging: true },
@@ -100,7 +97,6 @@
     }
   }
 
-  // ------------------------------------------------------------------ loading / errors
   let pending = 0;
   function setLoading(on) {
     pending = Math.max(0, pending + (on ? 1 : -1));
@@ -141,8 +137,7 @@
     return resp.status + ' ' + resp.statusText;
   }
 
-  /* GET a JSON endpoint. Non-2xx responses raise ApiError with the server's detail
-   * message; unless opts.silent the message also goes to the error banner. */
+  /* Non-2xx raises ApiError with the server's detail; shown in the error banner unless opts.silent. */
   async function apiGet(path, params, opts) {
     opts = opts || {};
     setLoading(true);
@@ -166,7 +161,6 @@
     }
   }
 
-  // ------------------------------------------------------------------ formatting
   function isNum(x) {
     return typeof x === 'number' && Number.isFinite(x);
   }
@@ -184,7 +178,6 @@
     return String(parseFloat(x.toPrecision(digits)));
   }
 
-  /* p- and q-values in scientific notation. */
   function fmtP(x) {
     if (!isNum(x)) return '–';
     return x.toExponential(2);
@@ -202,7 +195,6 @@
     return COLUMN_LABELS[key] || key;
   }
 
-  /* Column definitions for a table from raw keys: label, formatter and a class per cell. */
   function columns(keys, overrides) {
     overrides = overrides || {};
     return keys.map((key) => {
@@ -215,7 +207,6 @@
     });
   }
 
-  // ------------------------------------------------------------------ DOM helpers
   function el(tag, attrs, children) {
     const node = document.createElement(tag);
     Object.entries(attrs || {}).forEach(([k, v]) => {
@@ -258,7 +249,6 @@
     window.history.replaceState(null, '', url);
   }
 
-  // ------------------------------------------------------------------ tables
   function compareValues(a, b) {
     const an = a === null || a === undefined || (typeof a === 'number' && !Number.isFinite(a));
     const bn = b === null || b === undefined || (typeof b === 'number' && !Number.isFinite(b));
@@ -269,8 +259,7 @@
     return String(a).localeCompare(String(b), undefined, { numeric: true });
   }
 
-  /* Render a sortable table. cols: [{key, label, format?, className?}]. Clicking a header
-   * sorts by that column (numbers numerically, nulls last); a second click flips the order. */
+  /* cols: [{key, label, format?, className?}]. Nulls stay last in both sort directions. */
   function renderTable(container, cols, rows, options) {
     if (typeof container === 'string') container = $(container);
     options = options || {};
@@ -339,7 +328,6 @@
     if (rows.length > maxRows) container.appendChild(el('p', { class: 'table-caption', text: 'Showing the first ' + maxRows + ' of ' + rows.length + ' rows; download the CSV for all of them.' }));
   }
 
-  // ------------------------------------------------------------------ CSV (client side)
   function csvEscape(v) {
     if (v === null || v === undefined) return '';
     const s = String(v);
@@ -359,7 +347,6 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
-  // ------------------------------------------------------------------ cancer types
   let cancerTypesPromise = null;
   function loadCancerTypes() {
     if (!cancerTypesPromise) {
@@ -389,9 +376,7 @@
     if (selected) select.value = selected;
   }
 
-  // ------------------------------------------------------------------ gene autocomplete
-  /* Suggestions from /api/genes/search under a text input. onSelect(gene) fires when a
-   * suggestion is chosen with the mouse or with Enter; arrow keys move the highlight. */
+  /* onSelect(gene) fires when a suggestion is picked with the mouse or with Enter. */
   function attachGeneAutocomplete(input, onSelect) {
     const list = el('ul', { class: 'autocomplete-list', role: 'listbox' });
     list.hidden = true;
@@ -472,7 +457,6 @@
     return { close: close };
   }
 
-  // ------------------------------------------------------------------ page chrome
   function initChrome() {
     const dismiss = $('error-dismiss');
     if (dismiss) dismiss.addEventListener('click', clearError);
