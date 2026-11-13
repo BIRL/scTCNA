@@ -59,6 +59,7 @@ DIRECTIONS = ("noisy", "stable")
 SCORES = ("depth2", "depth")
 LEVELS = ("cell", "sample")
 MAX_HEATMAP_GENES = 200
+MAX_LOOKUP_GENES = 500
 MAX_PATIENT_TABLES = 1  # each per-patient table is tens of MB; one stays in memory
 CELLTYPE_KEY_STRIDE = 1_000_000
 MAX_CACHE_ENTRIES = 64
@@ -191,6 +192,8 @@ class Store:
         # row lookups into the summary tables: positional indices rather than per-cancer copies keep memory low
         self._summary_by_gene = self.gene_summary.groupby("gene").indices
         self._summary_idx_by_cancer = {str(ct): idx for ct, idx in self.gene_summary.groupby("cancer_type", observed=True).indices.items()}
+        gene_column = self.gene_summary["gene"].to_numpy()
+        self._genes_by_cancer = {ct: frozenset(gene_column[idx]) for ct, idx in self._summary_idx_by_cancer.items()}
         self._cells_idx_by_cancer = {str(ct): idx for ct, idx in self.cell_scores.groupby("cancer_type", observed=True).indices.items()}
         self._samples_by_cancer = {str(ct): df.reset_index(drop=True) for ct, df in self.sample_scores.groupby("cancer_type", observed=True)}
         # cell-type rows sorted by an integer (cancer type, gene) key, looked up with a binary search
@@ -286,19 +289,50 @@ class Store:
     def dataset_rows(self) -> list[dict[str, Any]]:
         return _records(self.datasets)
 
-    def search_genes(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Case-insensitive prefix matches; the exact symbol sorts first, then alphabetically."""
+    def search_genes(self, q: str, limit: int = 20, cancer_type: str | None = None) -> list[dict[str, Any]]:
+        """Case-insensitive prefix matches; the exact symbol sorts first, then alphabetically.
+
+        With ``cancer_type`` only genes measured in that cancer type are returned.
+        """
         key = q.strip().upper()
         if not key:
             raise BadRequest("q must not be empty")
+        allowed = None
+        if cancer_type is not None:
+            self.cancer(cancer_type)
+            allowed = self._genes_by_cancer.get(cancer_type, frozenset())
         # the exact key is the smallest string with that prefix, so the sorted order already puts it first
         i = bisect_left(self._search_keys, key)
         results = []
         while i < len(self._search_keys) and len(results) < limit and self._search_keys[i].startswith(key):
             gene = self._canonical[self._search_keys[i]]
-            results.append({"gene": gene, "n_cancer_types": self._n_cancer_types.get(gene, 0)})
+            if allowed is None or gene in allowed:
+                results.append({"gene": gene, "n_cancer_types": self._n_cancer_types.get(gene, 0)})
             i += 1
         return results
+
+    def lookup_genes(self, genes: str, cancer_type: str | None = None) -> dict[str, Any]:
+        """Resolve a user-supplied gene list: canonical symbols found, symbols in no dataset and,
+        with ``cancer_type``, symbols that exist elsewhere but are not measured in that cancer type."""
+        requested = self.parse_gene_list(genes)
+        if not requested:
+            raise BadRequest("genes must list at least one gene symbol")
+        if len(requested) > MAX_LOOKUP_GENES:
+            raise BadRequest(f"at most {MAX_LOOKUP_GENES} genes per lookup (got {len(requested)})")
+        allowed = None
+        if cancer_type is not None:
+            self.cancer(cancer_type)
+            allowed = self._genes_by_cancer.get(cancer_type, frozenset())
+        found, unknown, absent = [], [], []
+        for token in requested:
+            symbol = self._canonical.get(token.upper())
+            if symbol is None:
+                unknown.append(token)
+            elif allowed is not None and symbol not in allowed:
+                absent.append(symbol)
+            else:
+                found.append(symbol)
+        return {"cancer_type": cancer_type, "found": found, "unknown": unknown, "not_in_cancer_type": absent}
 
     def gene(self, gene: str) -> dict[str, Any]:
         symbol = self.gene_symbol(gene)

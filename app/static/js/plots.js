@@ -1,4 +1,4 @@
-/* Plotly helpers shared by the pages (one colour per compartment everywhere), exposed on window.Plots. */
+/* Plotly helpers shared by the pages (one colour per cell group everywhere), exposed on window.Plots. */
 (function (global) {
   'use strict';
 
@@ -10,9 +10,13 @@
     accent: '#1f5fa8',
     line: '#9aa7b4',
   };
-  const LABELS = { malignant: 'Malignant', non_malignant: 'Non-malignant' };
-  const FONT = { family: 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', size: 12, color: '#22303c' };
+  const LABELS = { malignant: 'Malignant cells', non_malignant: 'Non-malignant cells' };
+  // TCNA's font stack (Tailwind's default sans); axis titles, tick labels and legend text are bold
+  const FAMILY = 'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
+  const FONT = { family: FAMILY, size: 12, color: '#22303c', weight: 'bold' };
+  const HOVER_FONT = { family: FAMILY, size: 12, color: '#22303c', weight: 'normal' };
   const GRID = '#eef1f5';
+  const HEIGHT = 380;
 
   function withAlpha(hex, alpha) {
     const n = parseInt(hex.slice(1), 16);
@@ -27,12 +31,13 @@
     over = over || {};
     const base = {
       font: FONT,
+      height: HEIGHT,
       paper_bgcolor: '#ffffff',
       plot_bgcolor: '#ffffff',
       margin: { l: 60, r: 16, t: 36, b: 56 },
-      legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom' },
+      legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom', font: FONT },
       hovermode: 'closest',
-      hoverlabel: { bgcolor: '#ffffff', bordercolor: '#c5cfd9', font: FONT },
+      hoverlabel: { bgcolor: '#ffffff', bordercolor: '#c5cfd9', font: HOVER_FONT },
     };
     const out = Object.assign({}, base, over);
     out.xaxis = Object.assign({ automargin: true, zeroline: false, gridcolor: GRID }, over.xaxis || {});
@@ -49,18 +54,36 @@
     };
   }
 
+  /* Plotly.react updates a plot in place. Only a placeholder (no plot yet) is cleared first: clearing an
+   * existing plot would detach Plotly's own nodes, and every later update would then draw off-screen. */
   function draw(div, data, layoutOver, filename) {
     const target = node(div);
-    target.classList.remove('plot-empty');
-    target.textContent = '';
+    if (!target._fullLayout) {
+      target.classList.remove('plot-empty');
+      target.textContent = '';
+    }
     return Plotly.react(target, data, layout(layoutOver), config(filename));
   }
 
   function empty(div, message) {
     const target = node(div);
-    if (target.data) Plotly.purge(target);
+    if (target._fullLayout) Plotly.purge(target);
     target.classList.add('plot-empty');
     target.textContent = message || 'No data.';
+  }
+
+  /* Legend-only traces: a coloured square and a name, no data. */
+  function legendKeys(items) {
+    return (items || []).map((it) => ({
+      type: 'scatter',
+      mode: 'markers',
+      x: [null],
+      y: [null],
+      name: it.name,
+      marker: { color: it.color, symbol: 'square', size: 12 },
+      hoverinfo: 'skip',
+      showlegend: true,
+    }));
   }
 
   function hoverNumbers(values, name) {
@@ -79,6 +102,7 @@
         marker: { color: s.color || COLORS[s.key] || COLORS.accent },
         hovertext: s.hover || null,
         hoverinfo: s.hover ? 'text' : 'x+y+name',
+        showlegend: true,
       };
       if (s.error) trace.error_y = { type: 'data', array: s.error, visible: true, color: '#55606b', thickness: 1.2, width: 4 };
       return trace;
@@ -91,12 +115,14 @@
         bargap: 0.25,
         xaxis: { title: opts.xtitle || '', type: 'category', tickangle: categories.length > 8 ? -45 : 0 },
         yaxis: { title: opts.ytitle || '', rangemode: opts.rangemode || 'tozero' },
-        showlegend: series.length > 1,
+        showlegend: true,
+        annotations: opts.annotations || [],
       },
       opts.filename
     );
   }
 
+  /* opts.legend = [{name, color}] explains the bar colours; opts.annotations are passed to the layout. */
   function bars(div, categories, values, opts) {
     opts = opts || {};
     const data = [
@@ -111,18 +137,20 @@
         cliponaxis: false,
         hovertext: opts.hover || null,
         hoverinfo: opts.hover ? 'text' : 'x+y',
+        showlegend: false,
       },
-    ];
+    ].concat(legendKeys(opts.legend));
     const lay = {
-      showlegend: false,
+      showlegend: !!(opts.legend && opts.legend.length),
       bargap: 0.3,
       xaxis: { title: opts.xtitle || '', zeroline: !!opts.horizontal, zerolinecolor: '#8a97a4' },
       yaxis: { title: opts.ytitle || '', zeroline: !opts.horizontal, zerolinecolor: '#8a97a4' },
+      annotations: opts.annotations || [],
     };
     if (opts.horizontal) {
       lay.yaxis.type = 'category';
       lay.yaxis.autorange = 'reversed';
-      lay.margin = { l: 90, r: 24, t: 24, b: 48 };
+      lay.margin = { l: 90, r: 24, t: 36, b: 48 };
     } else {
       lay.xaxis.type = 'category';
       lay.xaxis.tickangle = categories.length > 8 ? -45 : 0;
@@ -156,7 +184,7 @@
     }
     lines(pairs, false, opts.name || 'per patient');
     if (opts.overlay && opts.overlay.pairs && opts.overlay.pairs.length) lines(opts.overlay.pairs, true, opts.overlay.label || 'downsampled');
-    // medians of each compartment as wide dashes
+    // medians of each cell group as wide dashes
     const med = (vals) => {
       const v = vals.filter(App.isNum).sort((p, q) => p - q);
       if (!v.length) return null;
@@ -179,7 +207,7 @@
     }
     return draw(
       div,
-      data,
+      data.concat(legendKeys([{ name: LABELS.malignant, color: COLORS.malignant }, { name: LABELS.non_malignant, color: COLORS.non_malignant }])),
       {
         xaxis: { type: 'category', range: [-0.5, 1.5], tickfont: { size: 13 } },
         yaxis: { title: opts.ytitle || '', rangemode: opts.rangemode || 'normal' },
@@ -207,7 +235,7 @@
         line: { color: COLORS[key], width: 1.2 },
         fillcolor: withAlpha(COLORS[key], 0.35),
         hoverinfo: 'y+name',
-        showlegend: false,
+        showlegend: true,
       });
     });
     const pts = (patients || []).filter((p) => App.isNum(p.median));
@@ -228,9 +256,10 @@
       data,
       {
         violinmode: 'group',
+        height: opts.height || 420,
         xaxis: { type: 'category', categoryorder: 'array', categoryarray: [LABELS.malignant, LABELS.non_malignant], tickfont: { size: 13 } },
         yaxis: { title: opts.ytitle || '' },
-        showlegend: pts.length > 0,
+        showlegend: true,
       },
       opts.filename
     );
@@ -247,7 +276,7 @@
     });
   }
 
-  /* Genes x cancer types; null cells stay blank. */
+  /* Genes x cancer types; null cells stay blank. The colour bar is the legend. */
   function heatmap(div, genes, cancerTypes, values, opts) {
     opts = opts || {};
     const z = opts.zscore ? zscoreRows(values) : values;
@@ -276,20 +305,20 @@
       ygap: 2,
       colorscale: diverging ? 'RdBu' : 'YlOrRd',
       reversescale: false, // RdBu as drawn by Plotly: high values red, low values blue
-      colorbar: { title: { text: opts.zscore ? 'row z-score' : opts.colorbar || '', side: 'right' }, thickness: 14, len: 0.8 },
+      colorbar: { title: { text: opts.zscore ? 'row z-score' : opts.colorbar || '', side: 'right', font: FONT }, tickfont: FONT, thickness: 14, len: 0.8 },
     };
     if (diverging) {
       trace.zmid = 0;
       trace.zmin = -zmax || -1;
       trace.zmax = zmax || 1;
     }
-    const height = Math.max(340, 24 * genes.length + 140);
+    const height = Math.max(opts.minHeight || 340, 24 * genes.length + 120);
     return draw(
       div,
       [trace],
       {
         height: height,
-        margin: { l: 90, r: 16, t: 24, b: 70 },
+        margin: { l: 90, r: 16, t: 16, b: 70 },
         xaxis: { type: 'category', side: 'bottom', tickangle: cancerTypes.length > 8 ? -45 : 0, showgrid: false },
         yaxis: { type: 'category', autorange: 'reversed', showgrid: false, tickfont: { size: genes.length > 60 ? 9 : 11 } },
       },
@@ -297,12 +326,19 @@
     );
   }
 
+  /* Resize the plots inside a container that was hidden while they were drawn (e.g. a closed <details>). */
+  function resizeWithin(container) {
+    node(container).querySelectorAll('.js-plotly-plot').forEach((gd) => Plotly.Plots.resize(gd));
+  }
+
   global.Plots = {
     COLORS: COLORS,
     LABELS: LABELS,
+    FONT: FONT,
     withAlpha: withAlpha,
     draw: draw,
     empty: empty,
+    legendKeys: legendKeys,
     groupedBars: groupedBars,
     bars: bars,
     pairedLines: pairedLines,
@@ -310,5 +346,6 @@
     heatmap: heatmap,
     zscoreRows: zscoreRows,
     hoverNumbers: hoverNumbers,
+    resizeWithin: resizeWithin,
   };
 })(window);

@@ -29,6 +29,7 @@
 
   async function run() {
     App.clearError();
+    App.setNote('genes-note', []);
     const q = query();
     const genes = q.genes ? q.genes.split(',') : [];
     if (!genes.length) {
@@ -72,14 +73,24 @@
       colorbar: info.label.length > 28 ? res.metric : info.label,
       filename: 'heatmap_' + res.metric + (zscore ? '_zscore' : ''),
     });
-    const rows = res.genes.map((g, i) => {
-      const row = { gene: g };
-      res.cancer_types.forEach((ct, j) => {
-        row[ct] = res.values[i][j];
-      });
-      return row;
+    // cancer types in rows, genes in columns
+    App.renderMetricTable('table', {
+      corner: 'Cancer type',
+      columns: res.genes.map((g) => ({ label: g })),
+      rows: res.cancer_types.map((ct, j) => ({ label: ct, title: ct, values: res.values.map((row) => row[j]) })),
     });
-    App.renderTable('table', App.columns(['gene'].concat(res.cancer_types)), rows, { sortKey: null });
+  }
+
+  /* After an upload: list the symbols that are in no dataset. */
+  async function checkUpload(genes, filename, added) {
+    const lines = [filename + ': ' + added + (added === 1 ? ' new symbol' : ' new symbols') + ' added; the list now has ' + genes.length + '.'];
+    if (genes.length > MAX_GENES) lines.push('At most ' + MAX_GENES + ' genes can be drawn at once.');
+    const res = await App.lookupGenes(genes, null);
+    if (res) {
+      if (genes.length > App.MAX_LOOKUP) lines.push('Only the first ' + App.MAX_LOOKUP + ' symbols were checked.');
+      lines.push(res.unknown.length ? 'Not found in any dataset: ' + res.unknown.join(', ') + '.' : 'All symbols were found.');
+    }
+    App.setNote('genes-note', lines);
   }
 
   async function fillExample() {
@@ -115,6 +126,7 @@
       render();
     });
     $('example').addEventListener('click', fillExample);
+    App.attachGeneUpload($('genes-file'), $('genes'), checkUpload);
     if (params.get('genes')) {
       $('genes').value = parseGenes(params.get('genes')).join('\n');
       run();

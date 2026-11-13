@@ -7,4 +7,4 @@ log2 ratio of CVs, DEPTH and DEPTH2); single-cell specific choices are
 documented in METHODS.md and marked "scTCNA assumption" in the code.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -123,10 +123,11 @@ Routes of `sctcna/web/routes.py`, served under `/api` by the standalone app:
 
 | Route | Returns |
 |---|---|
-| `GET /api/health` | build information and the number of loaded datasets; 503 without tables |
+| `GET /api/health` | build information, the number of loaded datasets and the package version; 503 without tables |
 | `GET /api/cancer-types` | cancer types with dataset metadata |
 | `GET /api/datasets` | the datasets table |
-| `GET /api/genes/search?q=` | gene name suggestions |
+| `GET /api/genes/search?q=&cancer_type=` | gene name suggestions; with `cancer_type`, only genes measured in that cancer type |
+| `GET /api/genes/lookup?genes=&cancer_type=` | sorts a list of up to 500 symbols into `found`, `unknown` and `not_in_cancer_type` |
 | `GET /api/genes/{gene}` | per-cancer-type summary for one gene |
 | `GET /api/genes/{gene}/patients?cancer_type=` | per-patient values for one gene |
 | `GET /api/genes/{gene}/celltypes?cancer_type=` | per-cell-type values for one gene |
@@ -142,20 +143,20 @@ Routes of `sctcna/web/routes.py`, served under `/api` by the standalone app:
 ## Tests
 
 ```bash
-make test        # 124 tests: unit, API and pipeline integration, on synthetic data
-make test-e2e    # 8 Playwright browser tests (needs: python -m playwright install chromium)
+make test        # 127 tests: unit, API and pipeline integration, on synthetic data
+make test-e2e    # 16 Playwright browser tests (needs: python -m playwright install chromium)
 make lint        # ruff check and ruff format --check
 python scripts/check_memory.py --data data/app   # peak memory of the app
 ```
 
 | File | Tests |
 |---|---|
-| `tests/test_api.py` | 54 |
+| `tests/test_api.py` | 57 |
 | `tests/test_metrics.py` | 16 |
 | `tests/test_pipeline.py` | 16 |
 | `tests/test_io.py` | 13 |
 | `tests/test_depth.py` | 9 |
-| `tests/test_e2e.py` | 8 |
+| `tests/test_e2e.py` | 16 |
 | `tests/test_qc.py` | 8 |
 | `tests/test_stats.py` | 8 |
 

@@ -5,7 +5,7 @@
   // Relative base so the app also works when mounted under a path prefix.
   const API_BASE = 'api';
 
-  const COMPARTMENT_LABEL = { malignant: 'Malignant', non_malignant: 'Non-malignant' };
+  const COMPARTMENT_LABEL = { malignant: 'Malignant cells', non_malignant: 'Non-malignant cells' };
 
   const COLUMN_LABELS = {
     dataset: 'Dataset',
@@ -16,7 +16,7 @@
     value: 'Value',
     value_q: 'q (this metric)',
     patient: 'Patient',
-    compartment: 'Compartment',
+    compartment: 'Cell group',
     cell_type: 'Cell type',
     n_cells: 'Cells',
     n_patients: 'Patients',
@@ -30,42 +30,43 @@
     cv2_resid: 'Mean-corr. CV²',
     cv_ds: 'CV (downsampled)',
     cv2_resid_ds: 'Mean-corr. CV² (downsampled)',
-    mean_malignant: 'Mean Mal',
-    mean_non_malignant: 'Mean Non-mal',
-    detection_rate_malignant: 'Detection Mal',
-    detection_rate_non_malignant: 'Detection Non-mal',
-    sd_malignant: 'SD Mal',
-    sd_non_malignant: 'SD Non-mal',
-    cv_malignant: 'CV Mal',
-    cv_non_malignant: 'CV Non-mal',
-    cv2_malignant: 'CV² Mal',
-    cv2_non_malignant: 'CV² Non-mal',
-    mad_malignant: 'MAD Mal',
-    mad_non_malignant: 'MAD Non-mal',
-    fano_malignant: 'Fano Mal',
-    fano_non_malignant: 'Fano Non-mal',
-    cv2_resid_malignant: 'Mean-corr. CV² Mal',
-    cv2_resid_non_malignant: 'Mean-corr. CV² Non-mal',
-    n_patients_malignant: 'Patients Mal',
-    n_patients_non_malignant: 'Patients Non-mal',
+    mean_malignant: 'Mean, malignant cells',
+    mean_non_malignant: 'Mean, non-malignant cells',
+    detection_rate_malignant: 'Detection, malignant cells',
+    detection_rate_non_malignant: 'Detection, non-malignant cells',
+    sd_malignant: 'SD, malignant cells',
+    sd_non_malignant: 'SD, non-malignant cells',
+    cv_malignant: 'CV, malignant cells',
+    cv_non_malignant: 'CV, non-malignant cells',
+    cv2_malignant: 'CV², malignant cells',
+    cv2_non_malignant: 'CV², non-malignant cells',
+    mad_malignant: 'MAD, malignant cells',
+    mad_non_malignant: 'MAD, non-malignant cells',
+    fano_malignant: 'Fano, malignant cells',
+    fano_non_malignant: 'Fano, non-malignant cells',
+    cv2_resid_malignant: 'Mean-corr. CV², malignant cells',
+    cv2_resid_non_malignant: 'Mean-corr. CV², non-malignant cells',
+    n_patients_malignant: 'Patients, malignant cells',
+    n_patients_non_malignant: 'Patients, non-malignant cells',
     n_pairs: 'Paired patients',
-    log2fc_cv_median: 'log2(CV Mal/Non-mal) median',
-    log2fc_cv_mean: 'log2(CV Mal/Non-mal) mean',
-    log2fc_cv_of_medians: 'log2(CV Mal/Non-mal) of medians',
+    n_patients_paired: 'Patients with both cell groups',
+    log2fc_cv_median: 'log2(CV malignant / CV non-malignant), median',
+    log2fc_cv_mean: 'log2(CV malignant / CV non-malignant), mean',
+    log2fc_cv_of_medians: 'log2(median CV malignant / median CV non-malignant)',
     wilcoxon_stat: 'Wilcoxon W',
     p_value: 'p (CV)',
     q_value: 'q (CV)',
     rank_biserial: 'Rank-biserial',
-    log2fc_mad_median: 'log2(MAD Mal/Non-mal)',
+    log2fc_mad_median: 'log2(MAD malignant / MAD non-malignant)',
     p_value_mad: 'p (MAD)',
     q_value_mad: 'q (MAD)',
-    log2fc_fano_median: 'log2(Fano Mal/Non-mal)',
+    log2fc_fano_median: 'log2(Fano malignant / Fano non-malignant)',
     p_value_fano: 'p (Fano)',
     q_value_fano: 'q (Fano)',
-    delta_cv2_resid: 'Δ mean-corr. CV²',
+    delta_cv2_resid: 'Δ mean-corr. CV² (malignant − non-malignant)',
     expressed: 'Expressed',
-    cv_pooled_malignant: 'CV pooled Mal',
-    cv_pooled_non_malignant: 'CV pooled Non-mal',
+    cv_pooled_malignant: 'CV pooled, malignant cells',
+    cv_pooled_non_malignant: 'CV pooled, non-malignant cells',
     depth2_pseudobulk: 'DEPTH2 (pseudo-bulk)',
     depth_pseudobulk: 'DEPTH (pseudo-bulk)',
     depth_cell_median: 'DEPTH (cell median)',
@@ -75,19 +76,42 @@
 
   // Shared by the top-genes and heatmap pages; keys are the API's metric names.
   const RANK_METRICS = [
-    { key: 'log2fc_cv_median', label: 'Differential noise log2(CV Mal/CV Non-mal)', hasQ: true, diverging: true },
-    { key: 'log2fc_mad_median', label: 'log2(MAD Mal/MAD Non-mal)', hasQ: true, diverging: true },
-    { key: 'log2fc_fano_median', label: 'log2(Fano Mal/Fano Non-mal)', hasQ: true, diverging: true },
-    { key: 'delta_cv2_resid', label: 'Δ mean-corrected CV² (Mal - Non-mal)', hasQ: true, diverging: true },
-    { key: 'cv_malignant', label: 'CV, Malignant', compartment: 'malignant' },
-    { key: 'cv_non_malignant', label: 'CV, Non-malignant', compartment: 'non_malignant' },
-    { key: 'mad_malignant', label: 'MAD, Malignant', compartment: 'malignant' },
-    { key: 'mad_non_malignant', label: 'MAD, Non-malignant', compartment: 'non_malignant' },
-    { key: 'fano_malignant', label: 'Fano, Malignant', compartment: 'malignant' },
-    { key: 'fano_non_malignant', label: 'Fano, Non-malignant', compartment: 'non_malignant' },
-    { key: 'cv2_resid_malignant', label: 'Mean-corrected CV² (LOWESS residual), Malignant', compartment: 'malignant', diverging: true },
-    { key: 'cv2_resid_non_malignant', label: 'Mean-corrected CV² (LOWESS residual), Non-malignant', compartment: 'non_malignant', diverging: true },
+    { key: 'log2fc_cv_median', label: 'Differential noise log2(CV malignant / CV non-malignant)', hasQ: true, diverging: true },
+    { key: 'log2fc_mad_median', label: 'log2(MAD malignant / MAD non-malignant)', hasQ: true, diverging: true },
+    { key: 'log2fc_fano_median', label: 'log2(Fano malignant / Fano non-malignant)', hasQ: true, diverging: true },
+    { key: 'delta_cv2_resid', label: 'Δ mean-corrected CV² (malignant − non-malignant cells)', hasQ: true, diverging: true },
+    { key: 'cv_malignant', label: 'CV, malignant cells', compartment: 'malignant' },
+    { key: 'cv_non_malignant', label: 'CV, non-malignant cells', compartment: 'non_malignant' },
+    { key: 'mad_malignant', label: 'MAD, malignant cells', compartment: 'malignant' },
+    { key: 'mad_non_malignant', label: 'MAD, non-malignant cells', compartment: 'non_malignant' },
+    { key: 'fano_malignant', label: 'Fano, malignant cells', compartment: 'malignant' },
+    { key: 'fano_non_malignant', label: 'Fano, non-malignant cells', compartment: 'non_malignant' },
+    { key: 'cv2_resid_malignant', label: 'Mean-corrected CV² (LOWESS residual), malignant cells', compartment: 'malignant', diverging: true },
+    { key: 'cv2_resid_non_malignant', label: 'Mean-corrected CV² (LOWESS residual), non-malignant cells', compartment: 'non_malignant', diverging: true },
   ];
+
+  // Bulk TCNA (https://tcna.lums.edu.pk): its site names (GET /api/sites there) for the cancer types here.
+  const TCNA_URL = 'https://tcna.lums.edu.pk/';
+  const TCNA_SITES = {
+    BRCA: 'Breast',
+    LUAD: 'Lung',
+    COAD: 'Colorectal',
+    HNSC: 'Head and Neck',
+    GBM: 'Brain and Nervous System',
+    LIHC: 'Liver and Bile Duct',
+    PDAC: 'Pancreas',
+    SKCM: 'Skin',
+    OV: 'Ovary',
+    KIRC: 'Kidney',
+  };
+
+  /* Link to TCNA's gene-results page for genes in the given cancer types (null when none maps to a TCNA site). */
+  function tcnaGeneUrl(genes, cancerTypes, analysisType) {
+    const sites = cancerTypes.map((ct) => TCNA_SITES[ct]).filter(Boolean);
+    if (!sites.length || !genes.length) return null;
+    const q = new URLSearchParams({ sites: sites.join(','), genes: genes.join(','), analysisType: analysisType });
+    return TCNA_URL + 'gene-results?' + q.toString();
+  }
 
   class ApiError extends Error {
     constructor(message, status) {
@@ -328,6 +352,146 @@
     if (rows.length > maxRows) container.appendChild(el('p', { class: 'table-caption', text: 'Showing the first ' + maxRows + ' of ' + rows.length + ' rows; download the CSV for all of them.' }));
   }
 
+  function isEmpty(v) {
+    return v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v));
+  }
+
+  /* Transposed table: one row per metric, one column per gene, cancer type or comparison group.
+   * spec.columns = [{label, title}]; spec.rows = [{label, title, values (one per column), format, className, link, group, groupTitle}].
+   * Consecutive rows with the same `group` are listed under one heading row (each row then names a cell group).
+   * Rows with `link` hold {href, text} objects that open in a new tab. Clicking a row label sorts the
+   * columns by that row (again to reverse); empty cells stay last. spec.order = initial column order. */
+  function renderMetricTable(container, spec) {
+    if (typeof container === 'string') container = $(container);
+    container.innerHTML = '';
+    const ncol = spec.columns.length;
+    if (!ncol || !spec.rows.length) {
+      container.appendChild(el('div', { class: 'placeholder', text: spec.emptyText || 'No values.' }));
+      return;
+    }
+    let order = spec.order ? spec.order.slice() : spec.columns.map((c, i) => i);
+    let sortRow = null;
+    let sortDir = 'desc';
+    const table = el('table', { class: 'data-table metric-table' });
+    const thead = el('thead');
+    const tbody = el('tbody');
+    table.appendChild(thead);
+    table.appendChild(tbody);
+
+    function cell(row, j) {
+      const raw = row.values[j];
+      if (row.link) {
+        return el('td', { class: 'text' }, raw && raw.href ? [el('a', { href: raw.href, target: '_blank', rel: 'noopener', text: raw.text })] : ['–']);
+      }
+      const td = el('td', { text: row.format ? row.format(raw) : fmt(raw) });
+      if (typeof raw === 'string') td.classList.add('text');
+      const cls = row.className ? row.className(raw) : '';
+      if (cls) td.classList.add(cls);
+      return td;
+    }
+
+    function sortBy(r) {
+      const values = spec.rows[r].values;
+      if (sortRow === r) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else {
+        sortRow = r;
+        sortDir = values.some((v) => typeof v === 'string') ? 'asc' : 'desc';
+      }
+      const sign = sortDir === 'asc' ? 1 : -1;
+      order = spec.columns.map((c, i) => i).sort((a, b) => {
+        const c = compareValues(values[a], values[b]);
+        return isEmpty(values[a]) || isEmpty(values[b]) ? c : c * sign;
+      });
+      render();
+    }
+
+    function render() {
+      thead.innerHTML = '';
+      const head = el('tr', {}, [el('th', { class: 'corner', text: spec.corner || 'Metric' })]);
+      order.forEach((j) => head.appendChild(el('th', { text: spec.columns[j].label, title: spec.columns[j].title || spec.columns[j].label })));
+      thead.appendChild(head);
+      tbody.innerHTML = '';
+      let group = null;
+      spec.rows.forEach((row, r) => {
+        if (row.group && row.group !== group) {
+          tbody.appendChild(el('tr', { class: 'group-row' }, [el('th', { scope: 'rowgroup', text: row.group, title: row.groupTitle || null, class: row.groupTitle ? 'has-tip' : '' }), el('td', { colspan: ncol })]));
+        }
+        group = row.group || null;
+        const cls = [row.group ? 'sub' : '', row.title ? 'has-tip' : '', sortRow === r ? (sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc') : ''].filter(Boolean).join(' ');
+        const th = el('th', { scope: 'row', class: cls, title: row.title || null, text: row.label });
+        if (!row.link) th.addEventListener('click', () => sortBy(r));
+        const tr = el('tr', {}, [th]);
+        order.forEach((j) => tr.appendChild(cell(row, j)));
+        tbody.appendChild(tr);
+      });
+    }
+
+    render();
+    container.appendChild(el('div', { class: 'table-wrap' }, [table]));
+  }
+
+  /* Gene symbols of free text (one per line, or separated by spaces, commas or semicolons), upper-cased, without duplicates. */
+  function geneTokens(text) {
+    const seen = new Set();
+    const out = [];
+    (text || '').split(/[\s,;]+/).forEach((tok) => {
+      const g = tok.trim().toUpperCase();
+      if (g && !seen.has(g)) {
+        seen.add(g);
+        out.push(g);
+      }
+    });
+    return out;
+  }
+
+  const MAX_UPLOAD_BYTES = 1024 * 1024;
+
+  /* "Upload .txt" for a gene-list textarea: the file's symbols are merged with the typed list,
+   * upper-cased and de-duplicated; onMerged(genes, filename, nAdded) runs afterwards. */
+  function attachGeneUpload(fileInput, textarea, onMerged) {
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!file) return;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        showError(file.name + ' is larger than 1 MB; a gene list is one symbol per line.');
+        return;
+      }
+      let text;
+      try {
+        text = await file.text();
+      } catch (e) {
+        showError('Could not read ' + file.name + ': ' + e.message);
+        return;
+      }
+      const before = geneTokens(textarea.value).length;
+      const merged = geneTokens(textarea.value + '\n' + text);
+      textarea.value = merged.join('\n');
+      onMerged(merged, file.name, merged.length - before);
+    });
+  }
+
+  const MAX_LOOKUP = 500;
+
+  /* GET /genes/lookup: which symbols exist (and, with cancerType, are measured there). Resolves to null on failure. */
+  async function lookupGenes(genes, cancerType) {
+    if (!genes.length) return null;
+    try {
+      return await apiGet('/genes/lookup', { genes: genes.slice(0, MAX_LOOKUP).join(','), cancer_type: cancerType || null }, { silent: true });
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* Show or hide an inline note made of message lines. */
+  function setNote(node, lines) {
+    if (typeof node === 'string') node = $(node);
+    lines = (lines || []).filter(Boolean);
+    node.innerHTML = '';
+    lines.forEach((line) => node.appendChild(el('p', { text: line })));
+    node.hidden = lines.length === 0;
+  }
+
   function csvEscape(v) {
     if (v === null || v === undefined) return '';
     const s = String(v);
@@ -376,8 +540,10 @@
     if (selected) select.value = selected;
   }
 
-  /* onSelect(gene) fires when a suggestion is picked with the mouse or with Enter. */
-  function attachGeneAutocomplete(input, onSelect) {
+  /* onSelect(gene) fires when a suggestion is picked with the mouse or with Enter.
+   * opts.cancerType() may return a cancer type: only genes measured there are suggested. */
+  function attachGeneAutocomplete(input, onSelect, opts) {
+    opts = opts || {};
     const list = el('ul', { class: 'autocomplete-list', role: 'listbox' });
     list.hidden = true;
     input.setAttribute('autocomplete', 'off');
@@ -416,7 +582,7 @@
       }
       const mine = ++seq;
       try {
-        const res = await apiGet('/genes/search', { q: q, limit: 15 }, { silent: true });
+        const res = await apiGet('/genes/search', { q: q, limit: 15, cancer_type: opts.cancerType ? opts.cancerType() : null }, { silent: true });
         if (mine !== seq) return;
         items = res.results || [];
         active = items.length ? 0 : -1;
@@ -457,7 +623,35 @@
     return { close: close };
   }
 
+  /* The "i" button at the top left of every page: shows the bullets of <template id="page-info">. */
+  function initInfo() {
+    const tpl = $('page-info');
+    const head = document.querySelector('.page-head');
+    if (!tpl || !head) return;
+    const panel = el('div', { id: 'page-info-panel', class: 'info-panel', role: 'region', 'aria-label': 'About this page' });
+    panel.appendChild(tpl.content.cloneNode(true));
+    panel.hidden = true;
+    const button = el('button', { type: 'button', class: 'info-btn', title: 'About this page', 'aria-label': 'About this page', 'aria-expanded': 'false', 'aria-controls': 'page-info-panel', text: 'i' });
+    head.insertBefore(button, head.firstChild);
+    head.appendChild(panel);
+    function setOpen(open) {
+      panel.hidden = !open;
+      button.setAttribute('aria-expanded', String(open));
+    }
+    button.addEventListener('click', () => setOpen(panel.hidden));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !panel.hidden) {
+        setOpen(false);
+        button.focus();
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!panel.hidden && !panel.contains(e.target) && !button.contains(e.target)) setOpen(false);
+    });
+  }
+
   function initChrome() {
+    initInfo();
     const dismiss = $('error-dismiss');
     if (dismiss) dismiss.addEventListener('click', clearError);
     const version = $('footer-version');
@@ -465,10 +659,10 @@
       apiGet('/health', null, { silent: true })
         .then((h) => {
           const parts = [];
-          if (h.build && h.build.sctcna_version) parts.push('scTCNA v' + h.build.sctcna_version);
+          if (h.version) parts.push('scTCNA v' + h.version);
+          if (h.build && h.build.built) parts.push('data build ' + h.build.built.slice(0, 10));
           if (h.n_datasets) parts.push(h.n_datasets + (h.n_datasets === 1 ? ' dataset' : ' datasets'));
           if (h.n_genes) parts.push(fmtInt(h.n_genes) + ' genes');
-          if (h.build && h.build.built) parts.push('built ' + h.build.built.slice(0, 10));
           version.textContent = parts.join(' · ');
           if (h.status !== 'ok') showError('The server has no data tables loaded yet (' + (h.detail || h.status) + ').');
         })
@@ -482,6 +676,8 @@
     COMPARTMENT_LABEL: COMPARTMENT_LABEL,
     COLUMN_LABELS: COLUMN_LABELS,
     RANK_METRICS: RANK_METRICS,
+    TCNA_SITES: TCNA_SITES,
+    tcnaGeneUrl: tcnaGeneUrl,
     apiGet: apiGet,
     apiUrl: apiUrl,
     buildQuery: buildQuery,
@@ -500,6 +696,12 @@
     getParams: getParams,
     setParams: setParams,
     renderTable: renderTable,
+    renderMetricTable: renderMetricTable,
+    geneTokens: geneTokens,
+    attachGeneUpload: attachGeneUpload,
+    lookupGenes: lookupGenes,
+    MAX_LOOKUP: MAX_LOOKUP,
+    setNote: setNote,
     downloadCsv: downloadCsv,
     loadCancerTypes: loadCancerTypes,
     cancerLabel: cancerLabel,

@@ -17,6 +17,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
+from .. import __version__
 from .store import Store
 
 router = APIRouter()  # mounted at /api by app.main, or at another prefix (e.g. /api/sc) by a host application
@@ -65,8 +66,8 @@ def health(request: Request) -> Response:
     """200 with build info when the tables are loaded; 503 otherwise, so a host's health check fails a deploy without data."""
     store = request.app.state.store
     if store is None:
-        return json_response({"status": "no-data", "n_datasets": 0, "n_genes": 0, "build": None, "detail": request.app.state.data_error}, status_code=503)
-    return json_response({"status": "ok", **store.health()})
+        return json_response({"status": "no-data", "n_datasets": 0, "n_genes": 0, "build": None, "detail": request.app.state.data_error, "version": __version__}, status_code=503)
+    return json_response({"status": "ok", **store.health(), "version": __version__})
 
 
 @router.get("/cancer-types")
@@ -80,8 +81,13 @@ def datasets(store: StoreDep) -> Response:
 
 
 @router.get("/genes/search")
-def search_genes(store: StoreDep, q: str = "", limit: Annotated[int, Query(ge=1, le=100)] = 20) -> Response:
-    return json_response({"query": q, "results": store.search_genes(q, limit)})
+def search_genes(store: StoreDep, q: str = "", limit: Annotated[int, Query(ge=1, le=100)] = 20, cancer_type: str | None = None) -> Response:
+    return json_response({"query": q, "results": store.search_genes(q, limit, cancer_type)})
+
+
+@router.get("/genes/lookup")
+def lookup_genes(store: StoreDep, genes: str = "", cancer_type: str | None = None) -> Response:
+    return json_response(store.lookup_genes(genes, cancer_type))
 
 
 @router.get("/genes/{gene}")

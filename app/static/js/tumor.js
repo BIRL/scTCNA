@@ -12,8 +12,8 @@
     'depth2_cell_median_diff', 'depth2_cell_p', 'depth2_pseudobulk_median_diff', 'depth2_pseudobulk_p',
   ];
   const SUMMARY_LABELS = {
-    depth2_cell_median_malignant: { label: 'DEPTH2 per cell, Malignant' },
-    depth2_cell_median_non_malignant: { label: 'DEPTH2 per cell, Non-malignant' },
+    depth2_cell_median_malignant: { label: 'DEPTH2 per cell, malignant cells' },
+    depth2_cell_median_non_malignant: { label: 'DEPTH2 per cell, non-malignant cells' },
     depth2_cell_median_diff: { label: 'DEPTH2 per cell, median diff.' },
     depth2_cell_p: { label: 'p (DEPTH2 per cell)' },
     depth2_pseudobulk_median_diff: { label: 'DEPTH2 pseudo-bulk, median diff.' },
@@ -39,8 +39,8 @@
   }
 
   function statsText(test, what) {
-    if (!test || !test.n_pairs) return 'No paired test: DEPTH is only defined for malignant cells (the non-malignant cells are its reference), or too few patients have both compartments.';
-    return 'Paired Wilcoxon on ' + what + ': n = ' + test.n_pairs + ' patient pairs · median difference (Malignant − Non-malignant) = ' + fmt(test.median_diff) + ' · p = ' + fmtP(test.p_value) + ' · rank-biserial = ' + fmt(test.rank_biserial) + (App.isNum(test.p_value) ? '' : ' (test needs at least 6 pairs)');
+    if (!test || !test.n_pairs) return 'No paired test: DEPTH is only defined for malignant cells (the non-malignant cells are its reference), or too few patients have both cell groups.';
+    return 'Paired Wilcoxon on ' + what + ': n = ' + test.n_pairs + ' patient pairs · median difference (malignant − non-malignant cells) = ' + fmt(test.median_diff) + ' · p = ' + fmtP(test.p_value) + ' · rank-biserial = ' + fmt(test.rank_biserial) + (App.isNum(test.p_value) ? '' : ' (test needs at least 6 pairs)');
   }
 
   async function run() {
@@ -69,7 +69,7 @@
     if (res.level === 'cell') {
       const comp = res.compartments;
       $('title').textContent = label + ' per cell – ' + name;
-      $('subtitle').textContent = 'Malignant: ' + App.fmtInt(comp.malignant.n) + ' cells, median ' + fmt(comp.malignant.median) + ' · Non-malignant: ' + App.fmtInt(comp.non_malignant.n) + ' cells, median ' + fmt(comp.non_malignant.median) + '. Violins show up to 5,000 cells per compartment; dots are the per-patient medians.';
+      $('subtitle').textContent = 'Malignant cells: ' + App.fmtInt(comp.malignant.n) + ' cells, median ' + fmt(comp.malignant.median) + ' · Non-malignant cells: ' + App.fmtInt(comp.non_malignant.n) + ' cells, median ' + fmt(comp.non_malignant.median) + '. Violins show up to 5,000 cells per cell group; dots are the per-patient medians.';
       Plots.violins('plot-main', comp, res.patients, { ytitle: label + ' per cell (log2 CP10K + 1)', filename: filename });
       $('stats').textContent = statsText(res.paired_test, 'the per-patient medians');
       $('table-title').textContent = 'Per-patient medians of the per-cell ' + label;
@@ -79,7 +79,7 @@
 
     const key = res.score + '_pseudobulk';
     $('title').textContent = label + ' per pseudo-bulk profile – ' + name;
-    $('subtitle').textContent = 'One profile per patient and compartment: summed counts, log2(CPM + 1).';
+    $('subtitle').textContent = 'One profile per patient and cell group: summed counts, log2(CPM + 1).';
     const byPatient = {};
     res.rows.forEach((r) => {
       byPatient[r.patient] = byPatient[r.patient] || {};
@@ -96,7 +96,7 @@
       note.hidden = false;
       note.textContent = 'DEPTH scores each malignant pseudo-bulk against the mean of the non-malignant pseudo-bulks, so non-malignant profiles have no DEPTH value and no paired test is possible at this level. Use the cell level for a paired comparison of DEPTH.';
       const shown = pairs.filter((p) => App.isNum(p.a));
-      Plots.bars('plot-main', shown.map((p) => p.label), shown.map((p) => p.a), { colors: Plots.COLORS.malignant, ytitle: label + ' (malignant pseudo-bulk)', xtitle: 'patient', filename: filename });
+      Plots.bars('plot-main', shown.map((p) => p.label), shown.map((p) => p.a), { colors: Plots.COLORS.malignant, legend: [{ name: App.COMPARTMENT_LABEL.malignant, color: Plots.COLORS.malignant }], ytitle: label + ' (malignant pseudo-bulk)', xtitle: 'patient', filename: filename });
     }
     $('stats').textContent = hasNonMalignant ? statsText(res.paired_test, 'the pseudo-bulk scores') : '';
     $('table-title').textContent = 'Per-patient scores';
@@ -116,8 +116,8 @@
       'plot-summary',
       cats,
       [
-        { key: 'malignant', values: rows.map((r) => (App.isNum(r.depth2_cell_median_malignant) ? r.depth2_cell_median_malignant : null)), hover: rows.map((r) => (r.cancer_name || r.cancer_type) + '<br>Malignant DEPTH2 per cell: ' + fmt(r.depth2_cell_median_malignant) + '<br>paired p = ' + fmtP(r.depth2_cell_p)) },
-        { key: 'non_malignant', values: rows.map((r) => (App.isNum(r.depth2_cell_median_non_malignant) ? r.depth2_cell_median_non_malignant : null)), hover: rows.map((r) => (r.cancer_name || r.cancer_type) + '<br>Non-malignant DEPTH2 per cell: ' + fmt(r.depth2_cell_median_non_malignant)) },
+        { key: 'malignant', values: rows.map((r) => (App.isNum(r.depth2_cell_median_malignant) ? r.depth2_cell_median_malignant : null)), hover: rows.map((r) => (r.cancer_name || r.cancer_type) + '<br>DEPTH2 per cell, malignant cells: ' + fmt(r.depth2_cell_median_malignant) + '<br>paired p = ' + fmtP(r.depth2_cell_p)) },
+        { key: 'non_malignant', values: rows.map((r) => (App.isNum(r.depth2_cell_median_non_malignant) ? r.depth2_cell_median_non_malignant : null)), hover: rows.map((r) => (r.cancer_name || r.cancer_type) + '<br>DEPTH2 per cell, non-malignant cells: ' + fmt(r.depth2_cell_median_non_malignant)) },
       ],
       { ytitle: 'DEPTH2 per cell (median of patient medians)', filename: 'tumor_heterogeneity_summary' }
     );

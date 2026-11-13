@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cross-cancer summary · scTCNA</title>
+  <title>Malignant vs non-malignant noise across cancers · scTCNA</title>
   <meta name="description" content="Is transcriptional noise higher in malignant cells than in non-malignant cells of the same patients? Patient-level contrasts across ten cancer types (scTCNA).">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
@@ -27,25 +27,45 @@
   <main class="container">
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
-    <h1 class="page-title">Cross-cancer summary</h1>
-    <p class="page-lead">Is transcriptional noise higher in malignant cells than in non-malignant cells of the same patients? For every patient, genes detected in at least 10% of cells of both groups are compared and the median over genes is taken; patients are then tested against zero with a Wilcoxon signed-rank test, so the patient is the unit of replication. Three measures are shown because they answer different questions: the raw CV ratio (TCNA Eq. 1), the same ratio after downsampling all cells to a common UMI depth, and the depth-matched <em>excess noise</em>, i.e. how far malignant genes lie above the reference cells' mean-CV² trend at the same expression level.</p>
+    <div class="page-head"><h1 class="page-title">Malignant vs non-malignant noise across cancers</h1></div>
+    <template id="page-info">
+      <h2>Malignant vs non-malignant noise across cancers</h2>
+      <ul>
+        <li>Answers one question: over all genes, are malignant cells noisier than the non-malignant cells of the same patient? Each patient gives one value; patients are then tested against zero.</li>
+        <li>The first two panels need no input. In the per-patient panel, choose a cancer type and a measure.</li>
+        <li>Three measures: the raw log2 CV ratio, the same ratio after depth matching, and the excess noise (explained at the top of the page).</li>
+        <li>The heatmap compares malignant cells with single lineages (T cells, fibroblasts, ...): red means malignant cells are noisier, blue that the lineage is.</li>
+        <li>Tables list the measures in rows and the cancer types (or comparison groups) in columns; the CSV keeps one row per cancer type and comparison group.</li>
+      </ul>
+    </template>
+    <ul class="page-points">
+      <li><strong>The question:</strong> over all genes, are malignant cells noisier than the non-malignant cells of the same patient? Every patient gives one value per measure, and the patients are then tested against zero, so the patient is the unit of replication.</li>
+      <li><strong>Raw log2(CV malignant / CV non-malignant):</strong> for each gene detected in at least 10% of cells of both groups, the log2 ratio of its CV in malignant cells to its CV in non-malignant cells (<a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">TCNA Eq. 1</a><!-- DOI: fill when available -->), then the median over genes. Above zero means malignant cells are noisier.</li>
+      <li><strong>Depth-matched:</strong> all cells are downsampled to the same UMI count first, so sequencing depth cannot drive the ratio.</li>
+      <li><strong>Comparison group:</strong> the comparison group is either all non-malignant cells of the same patient or one lineage (T cells, fibroblasts, ...).</li>
+      <li><strong>Excess noise:</strong> how far a gene's log10 CV&sup2; in malignant cells lies above the comparison group's mean-CV&sup2; trend at the same expression level (depth-matched; median over genes), so expression level cannot drive it either.</li>
+    </ul>
+    <div class="callout" role="note">Negative values are expected: after matching depth and expression level, malignant cells are slightly less variable than non-malignant cells in all ten cancer types; see the scTCNA manuscript.</div>
 
     <section class="card">
       <div class="card-head">
-        <h2>Malignant versus all non-malignant cells</h2>
-        <div class="card-actions"><a id="csv-all" class="btn btn-outline" href="#">Download CSV</a></div>
+        <h2>Malignant cells versus all non-malignant cells</h2>
+        <div class="card-actions"><a id="csv-all" class="btn secondary small" href="#">Download CSV</a></div>
       </div>
-      <p class="card-sub">Bars are medians across patients. Positive values mean malignant cells are noisier. The non-malignant compartment pools several lineages, so the raw ratio also reflects differences in cell-type composition and sequencing depth.</p>
+      <p class="card-sub">Bars are medians across patients. Positive values mean malignant cells are noisier. The non-malignant cells pool several lineages, so the raw ratio also reflects differences in cell-type composition and sequencing depth.</p>
       <div id="plot-all" class="plot plot-empty">Loading…</div>
-      <div id="table-all" class="table-wrap"></div>
+      <p class="plot-caption">Depth-matched ratios are near zero and positive in GBM, LIHC, OV and SKCM; the excess-noise measure is the controlled one.</p>
+      <p class="card-sub table-intro">Measures in rows, cancer types in columns; click a row label to sort. The CSV keeps one row per cancer type and comparison group.</p>
+      <div id="table-all"></div>
     </section>
 
     <section class="card">
       <div class="card-head">
         <h2>Malignant cells versus single non-malignant lineages</h2>
       </div>
-      <p class="card-sub">Depth-matched excess noise of malignant cells over each lineage's mean-CV² trend (median across patients; lineages with at least 50 cells in at least 3 patients; q-values in the table). Red: malignant noisier; blue: the lineage is noisier.</p>
+      <p class="card-sub">Depth-matched excess noise of malignant cells over each lineage's mean-CV&sup2; trend (median across patients; lineages with at least 50 cells in at least 3 patients; q-values in the per-patient table below). Red: malignant cells noisier; blue: the lineage is noisier.</p>
       <div id="plot-lineages" class="plot plot-empty">Loading…</div>
+      <p class="plot-caption">Against normal epithelium the difference is close to zero; the deficit is largest against immune lineages.</p>
     </section>
 
     <section class="card">
@@ -56,16 +76,22 @@
           <div class="field"><label for="measure">Measure</label><select id="measure"></select></div>
         </div>
       </div>
-      <p class="card-sub">Each dot is one patient; the reference group is on the x axis. Values above zero mean that patient's malignant cells are noisier than the reference.</p>
+      <p class="card-sub">Each dot is one patient; the comparison group is on the x axis. Values above zero mean that patient's malignant cells are noisier than the comparison group.</p>
       <div id="plot-patients" class="plot plot-empty">Loading…</div>
-      <div id="table-patients" class="table-wrap"></div>
+      <p class="card-sub table-intro">Measures in rows, comparison groups in columns; click a row label to sort.</p>
+      <div id="table-patients"></div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
-      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    <div class="container footer-inner">
+      <p>&copy; 2026 BIRL &mdash; This website is free and open to all users and there is no login requirement.</p>
+      <a class="footer-lab" href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">Biomedical Informatics &amp; Engineering Research Laboratory,</a>
+      <p>Lahore University of Management Sciences, DHA, Lahore, Pakistan</p>
+      <p>+92 (42) 3560 8352</p>
+      <p class="footer-cite">Please cite: Shah R, Faisal A, et al., Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --></p>
+      <p class="footer-links"><a href="https://tcna.lums.edu.pk/" target="_blank" rel="noopener">TCNA (bulk RNA-seq)</a> &middot; <a href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">BIRL</a> &middot; <a href="about.html">About scTCNA</a></p>
+      <p class="footer-meta">Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
     </div>
   </footer>
 

@@ -27,22 +27,46 @@
   <main class="container">
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
-    <h1 class="page-title">About scTCNA</h1>
+    <div class="page-head"><h1 class="page-title">About scTCNA</h1></div>
+    <template id="page-info">
+      <h2>About scTCNA</h2>
+      <ul>
+        <li>What scTCNA is and how it differs from bulk TCNA.</li>
+        <li>Data sources, processing steps, metric definitions and statistics.</li>
+        <li>Assumptions, limitations and the next version.</li>
+        <li>The JSON API and the citations.</li>
+      </ul>
+    </template>
     <p class="page-lead">A single-cell RNA-seq counterpart of The Cancer Noise Atlas (TCNA): the same transcriptional-noise metrics, computed on malignant and non-malignant cells of the same patients.</p>
 
     <section class="card about-section">
       <h2>What scTCNA is</h2>
-      <p>TCNA (Shah et al., <em>J Mol Biol</em> 2026) quantifies transcriptional noise in bulk RNA-seq by comparing primary tumours with solid-tissue normals across patients. scTCNA applies the same vocabulary to droplet single-cell RNA-seq: for every gene, noise is measured across the cells of one patient, separately for the <strong>Malignant</strong> compartment (cells called malignant by the atlas) and the <strong>Non-malignant</strong> compartment (all curated non-malignant lineages pooled), and the two are compared <em>within</em> each patient. Cancer-type values are medians across patients; every test is paired across patients.</p>
+      <p>TCNA (<a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">Shah et al., <em>J Mol Biol</em> 2026</a><!-- DOI: fill when available -->) quantifies transcriptional noise in bulk RNA-seq by comparing primary tumours with solid-tissue normals across patients. scTCNA applies the same vocabulary to droplet single-cell RNA-seq: for every gene, noise is measured across the cells of one patient, separately for two cell groups, <strong>Malignant cells</strong> (cells called malignant by the atlas) and <strong>Non-malignant cells</strong> (all curated non-malignant lineages pooled), and the two are compared <em>within</em> each patient. Cancer-type values are medians across patients; every test is paired across patients.</p>
       <p>The app has the dashboards of TCNA plus a summary view: <a href="index.html">Gene Noise Analysis</a> (one gene across cancers, or a gene list within one cancer, with per-patient and per-cell-type detail), <a href="top-genes.html">Top genes</a> (ranked lists per cancer type), <a href="tumor.html">Tumor Heterogeneity</a> (DEPTH and DEPTH2), a cross-cancer <a href="heatmap.html">Heatmap</a> and the <a href="summary.html">Cross-cancer summary</a> (is malignant-cell noise higher, patient by patient?). Every table can be downloaded as CSV and every plot as PNG (camera icon in the plot toolbar); the JSON API is listed at the bottom of this page.</p>
     </section>
 
     <section class="card about-section">
-      <h2>How it differs from TCNA</h2>
+      <h2>How scTCNA differs from TCNA</h2>
+      <ul>
+        <li>TCNA compares tumour samples with normal samples across patients (bulk); scTCNA compares the malignant cells of one patient with that patient's own non-malignant cells (single cell).</li>
+        <li>Each patient is their own control, so germline, age, sex and handling differences cancel out.</li>
+        <li>scTCNA covers ovarian and melanoma, where TCNA has no normal samples.</li>
+        <li>The patient is the unit of replication; cells are never treated as replicates.</li>
+        <li>Sequencing depth and expression level are matched before comparison; detection rate is reported per gene, and genes detected in fewer than 10% of cells are not tested.</li>
+        <li>The comparison group can be all non-malignant cells or one lineage (T cells, fibroblasts, normal epithelium, ...).</li>
+        <li>DEPTH2 is computed per cell and per pseudo-bulk profile, which separates within-tumour from between-patient heterogeneity.</li>
+        <li>Malignant / non-malignant labels are the curated calls of the 3CA atlas (copy-number based in most studies), not scTCNA's own inference.</li>
+        <li>One study per cancer type and 6-27 patients per type; more studies per type are planned for v3.</li>
+      </ul>
+    </section>
+
+    <section class="card about-section">
+      <h2>Side by side</h2>
       <table class="info-table">
         <thead><tr><th></th><th>TCNA</th><th>scTCNA</th></tr></thead>
         <tbody>
           <tr><td>Data</td><td>Bulk RNA-seq (GDC): Primary Tumor vs Solid Tissue Normal, 26 anatomical sites</td><td>10x scRNA-seq from 3CA: one study per cancer type</td></tr>
-          <tr><td>Unit of observation</td><td>Sample</td><td>Cell, grouped by patient and compartment</td></tr>
+          <tr><td>Unit of observation</td><td>Sample</td><td>Cell, grouped by patient and cell group</td></tr>
           <tr><td>Contrast</td><td>Tumour vs normal samples across patients</td><td>Malignant vs non-malignant cells of the same patient</td></tr>
           <tr><td>Unit of replication</td><td>Sample</td><td>Patient: per-gene metrics are computed per patient, summarised as medians and tested with paired statistics</td></tr>
           <tr><td>Expression scale (gene noise)</td><td>TPM / FPKM / FPKM-UQ</td><td>CP10K (counts per 10,000) after QC and doublet removal</td></tr>
@@ -66,11 +90,11 @@
     <section class="card about-section">
       <h2>Processing in brief</h2>
       <ul>
-        <li><strong>Cell cap:</strong> patient x compartment groups above 3,000 cells are randomly subsampled to 3,000 (seed 0) before QC.</li>
-        <li><strong>QC:</strong> cells with &ge; 200 genes, &ge; 500 UMIs and &le; 20% mitochondrial counts; genes detected in &ge; 10 cells; Scrublet doublets removed per sample; patient x compartment groups with fewer than 20 cells dropped.</li>
+        <li><strong>Cell cap:</strong> per patient, each cell group above 3,000 cells is randomly subsampled to 3,000 (seed 0) before QC.</li>
+        <li><strong>QC:</strong> cells with &ge; 200 genes, &ge; 500 UMIs and &le; 20% mitochondrial counts; genes detected in &ge; 10 cells; Scrublet doublets removed per sample; a patient's cell group with fewer than 20 cells is dropped.</li>
         <li><strong>Normalisation:</strong> CP10K for the gene noise metrics; log2(CP10K + 1) per cell and log2(CPM + 1) per pseudo-bulk for DEPTH / DEPTH2.</li>
-        <li><strong>Groups:</strong> metrics are computed per gene within patient x compartment groups (primary unit), within patient x cell-type groups with &ge; 50 cells (lineage level), and on all cells pooled per compartment (a pseudoreplication diagnostic).</li>
-        <li><strong>Expressed genes:</strong> detection rate (median over patients) &ge; 10% in both compartments; only these enter tests, top lists and the per-patient tables.</li>
+        <li><strong>Groups:</strong> metrics are computed per gene within each patient's cell groups (primary unit), within patient x cell-type groups with &ge; 50 cells (lineage level), and on all cells pooled per cell group (a pseudoreplication diagnostic).</li>
+        <li><strong>Expressed genes:</strong> detection rate (median over patients) &ge; 10% in both cell groups; only these enter tests, top lists and the per-patient tables.</li>
       </ul>
     </section>
 
@@ -85,7 +109,7 @@
           <tr><td>CV</td><td><span class="formula">CV = SD / mean</span></td><td>TCNA's coefficient of variation (stored as a ratio; TCNA's web code reports CV x 100). Undefined (blank) when the mean is 0.</td></tr>
           <tr><td>CV&sup2;</td><td><span class="formula">CV&sup2; = (SD / mean)&sup2;</span></td><td></td></tr>
           <tr><td>MAD</td><td><span class="formula">MAD = (1/n) &Sigma;<sub>i</sub> |x<sub>ig</sub> - mean|</span></td><td><strong>Mean</strong> absolute deviation about the mean, the TCNA definition (not the median absolute deviation).</td></tr>
-          <tr><td>Fano</td><td><span class="formula">Fano = variance / mean = SD&sup2; / mean</span></td><td>scTCNA addition. Computed on the CP10K scale, so it depends on sequencing depth: for Poisson counts at library size N it is about 10<sup>4</sup>/N. Compare compartments with the downsampled (depth-matched) values or the Cross-cancer summary.</td></tr>
+          <tr><td>Fano</td><td><span class="formula">Fano = variance / mean = SD&sup2; / mean</span></td><td>scTCNA addition. Computed on the CP10K scale, so it depends on sequencing depth: for Poisson counts at library size N it is about 10<sup>4</sup>/N. Compare cell groups with the downsampled (depth-matched) values or the Cross-cancer summary.</td></tr>
           <tr><td>Detection rate</td><td><span class="formula">det = (1/n) &Sigma;<sub>i</sub> [x<sub>ig</sub> &gt; 0]</span></td><td>Fraction of cells with a non-zero count (scTCNA addition).</td></tr>
           <tr><td>mean-corrected CV&sup2; (LOWESS residual)</td><td><span class="formula">cv2_resid = log10(CV&sup2;) - f(log10 mean)</span></td><td><em>f</em> is a LOWESS curve (frac 0.3, 2 robustifying iterations) fitted across all genes of the same group of cells; positive values are noisier than genes of the same mean. Needs &ge; 50 usable genes per group.</td></tr>
           <tr><td>differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</td><td><span class="formula">D<sub>gp</sub> = log2( CV<sub>gp</sub><sup>malignant</sup> / CV<sub>gp</sub><sup>non-malignant</sup> )</span></td><td>TCNA Eq. 1 evaluated per patient <em>p</em>; the cancer-type value is the median of D<sub>gp</sub> across patients. The same ratio is formed for MAD and Fano; for the mean-corrected CV&sup2; the difference of residuals is used (it is already on a log scale).</td></tr>
@@ -93,46 +117,47 @@
       </table>
       <h3 style="margin-top: 16px;">Statistics</h3>
       <ul>
-        <li>Per gene and cancer type, the per-patient D<sub>gp</sub> (at least 6 patients with both compartments) are tested with a two-sided Wilcoxon signed-rank test (zero differences discarded).</li>
+        <li>Per gene and cancer type, the per-patient D<sub>gp</sub> (at least 6 patients with both cell groups) are tested with a two-sided Wilcoxon signed-rank test (zero differences discarded).</li>
         <li>Effect sizes: the median per-patient log2 ratio and the matched-pairs rank-biserial correlation <span class="formula">r = (R<sup>+</sup> - R<sup>-</sup>) / (R<sup>+</sup> + R<sup>-</sup>)</span> (+1 when every patient is noisier in malignant cells).</li>
         <li>Benjamini-Hochberg q-values per cancer type over the expressed genes that were tested; q &lt; 0.05 is highlighted in the plots.</li>
-        <li>The same paired test (at least 6 patients) compares the per-patient DEPTH2 medians and pseudo-bulk DEPTH2 between compartments.</li>
+        <li>The same paired test (at least 6 patients) compares the per-patient DEPTH2 medians and pseudo-bulk DEPTH2 between cell groups.</li>
       </ul>
     </section>
 
     <section class="card about-section">
       <h2>Malignant versus non-malignant noise, patient by patient</h2>
-      <p>The per-gene comparison above asks <em>which genes</em> differ. The <a href="summary.html">Cross-cancer summary</a> asks whether malignant cells are noisier <em>overall</em>. For every patient and every reference group (all non-malignant cells, or one non-malignant lineage with at least 50 cells), genes detected in at least 10% of cells of both groups are compared and the median over genes is kept, giving one number per patient:</p>
+      <p>The per-gene comparison above asks <em>which genes</em> differ. The <a href="summary.html">Cross-cancer summary</a> asks whether malignant cells are noisier <em>overall</em>. For every patient and every comparison group, genes detected in at least 10% of cells of both groups are compared and the median over genes is kept, giving one number per patient. The comparison group is either all non-malignant cells of the same patient or one lineage (T cells, fibroblasts, ...) with at least 50 cells.</p>
       <ul>
-        <li><strong>log2 CV ratio (raw)</strong>: median over genes of log2(CV<sub>mal</sub>/CV<sub>ref</sub>), TCNA Eq. 1.</li>
+        <li><strong>log2 CV ratio (raw)</strong>: median over genes of log2(CV<sub>mal</sub>/CV<sub>comparison</sub>), TCNA Eq. 1.</li>
         <li><strong>log2 CV ratio (depth-matched)</strong>: the same after downsampling every cell to the common UMI depth, so that deeper-sequenced cells do not look less noisy.</li>
-        <li><strong>Excess noise</strong>: median over genes of log10(CV&sup2;<sub>mal</sub>) minus the reference group's LOWESS mean-CV&sup2; trend evaluated at the malignant gene's mean (depth-matched; genes outside the reference's expression range are skipped). It removes both the mean dependence of CV and the depth difference.</li>
+        <li><strong>Excess noise</strong>: median over genes of log10(CV&sup2;<sub>mal</sub>) minus the comparison group's LOWESS mean-CV&sup2; trend evaluated at the malignant gene's mean (depth-matched; genes outside the comparison group's expression range are skipped). It removes both the mean dependence of CV and the depth difference.</li>
       </ul>
-      <p>Each measure is tested against zero across patients with a two-sided Wilcoxon signed-rank test (at least 6 patients), with Benjamini-Hochberg q-values over all reference groups and measures of a cancer type. These contrasts are an scTCNA addition; the raw ratio against the pooled non-malignant compartment is also affected by its mixture of lineages, which is why single lineages are shown as well.</p>
+      <p>Each measure is tested against zero across patients with a two-sided Wilcoxon signed-rank test (at least 6 patients), with Benjamini-Hochberg q-values over all comparison groups and measures of a cancer type. These contrasts are an scTCNA addition; the raw ratio against all non-malignant cells pooled is also affected by its mixture of lineages, which is why single lineages are shown as well.</p>
     </section>
 
     <section class="card about-section">
       <h2>DEPTH and DEPTH2</h2>
-      <p>Both tumour-heterogeneity scores follow the R packages used by TCNA and are applied to log2-transformed expression. A "sample" is either a single cell or a patient x compartment pseudo-bulk profile (summed counts, log2(CPM + 1)). Genes enter the scores when detected in &ge; 1% of the dataset's cells.</p>
+      <p>Both tumour-heterogeneity scores follow the R packages used by TCNA and are applied to log2-transformed expression. A "sample" is either a single cell or a patient x cell group pseudo-bulk profile (summed counts, log2(CPM + 1)). Genes enter the scores when detected in &ge; 1% of the dataset's cells.</p>
       <table class="info-table">
         <thead><tr><th>Score</th><th>Definition</th><th>Reference</th></tr></thead>
         <tbody>
-          <tr><td>DEPTH</td><td><span class="formula">DEPTH<sub>s</sub> = SD<sub>g</sub>[ (x<sub>gs</sub> - &mu;<sub>g</sub><sup>ref</sup>)&sup2; ]</span><br><span class="small muted">SD across genes of the squared deviation from the reference mean. Only malignant cells (per cell) and malignant pseudo-bulks (per sample) are scored; the reference is the mean over the dataset's non-malignant cells or pseudo-bulks, so non-malignant profiles have no DEPTH value and DEPTH is not compared between compartments.</span></td><td>DEPTH algorithm, WangX-Lab/DEPTH (Li M et al., <em>Commun Biol</em> 2020)</td></tr>
-          <tr><td>DEPTH2</td><td><span class="formula">DEPTH2<sub>s</sub> = SD<sub>g</sub>[ |z<sub>gs</sub>| ],&nbsp; z<sub>gs</sub> = (x<sub>gs</sub> - &mu;<sub>g</sub>) / &sigma;<sub>g</sub></span><br><span class="small muted">Genes z-scored across samples (sample SD; a constant gene gets z = 0 and still counts); the score is the SD across genes of |z|. Per cell, the samples are the cells of the same patient and compartment, so the score measures how atypical a cell is within its own tumour (or the patient's non-malignant cells); per pseudo-bulk, the samples are all pseudo-bulks of the dataset.</span></td><td>Song D, Wang X, <em>J Transl Med</em> 2022 (WangX-Lab/DEPTH2)</td></tr>
+          <tr><td>DEPTH</td><td><span class="formula">DEPTH<sub>s</sub> = SD<sub>g</sub>[ (x<sub>gs</sub> - &mu;<sub>g</sub><sup>ref</sup>)&sup2; ]</span><br><span class="small muted">SD across genes of the squared deviation from the reference mean. Only malignant cells (per cell) and malignant pseudo-bulks (per sample) are scored; the reference is the mean over the dataset's non-malignant cells or pseudo-bulks, so non-malignant profiles have no DEPTH value and DEPTH is not compared between cell groups.</span></td><td>DEPTH algorithm, WangX-Lab/DEPTH (Li M et al., <em>Commun Biol</em> 2020)</td></tr>
+          <tr><td>DEPTH2</td><td><span class="formula">DEPTH2<sub>s</sub> = SD<sub>g</sub>[ |z<sub>gs</sub>| ],&nbsp; z<sub>gs</sub> = (x<sub>gs</sub> - &mu;<sub>g</sub>) / &sigma;<sub>g</sub></span><br><span class="small muted">Genes z-scored across samples (sample SD; a constant gene gets z = 0 and still counts); the score is the SD across genes of |z|. Per cell, the samples are the cells of the same patient and cell group, so the score measures how atypical a cell is within its own tumour (or the patient's non-malignant cells); per pseudo-bulk, the samples are all pseudo-bulks of the dataset.</span></td><td>Song D, Wang X, <em>J Transl Med</em> 2022 (WangX-Lab/DEPTH2)</td></tr>
         </tbody>
       </table>
     </section>
 
     <section class="card about-section">
-      <h2>Assumptions and limitations</h2>
+      <h2>Assumptions, limitations and next version</h2>
       <ul>
-        <li>Tumour vs normal is replaced by malignant vs non-malignant cells of the same patient; the non-malignant compartment is a mixture of lineages (immune, stromal, normal epithelium), so composition differences between patients contribute to its noise. The per-cell-type view lets malignant cells be compared with one matched lineage.</li>
+        <li>Tumour vs normal is replaced by malignant vs non-malignant cells of the same patient; the non-malignant cell group is a mixture of lineages (immune, stromal, normal epithelium), so composition differences between patients contribute to its noise. The per-cell-type view lets malignant cells be compared with one matched lineage.</li>
         <li>One study per cancer type: cancer-type and study effects cannot be separated, and cross-cancer comparisons (heatmap) are confounded by study design, tissue handling and sequencing depth. All tests are within study and within patient.</li>
         <li>Malignant calls come from the atlas (inferred copy-number aberrations) and are not re-derived; unassigned cells are excluded.</li>
         <li>The melanoma study consists of metastases only. The liver dataset (Ma et al. 2019) mixes hepatocellular carcinoma and intrahepatic cholangiocarcinoma, as TCNA's Liver site does, and is small (6 paired patients); Sun et al. 2021 was not used because 3CA provides it only as normalised TPM values. The per-patient cell cap and uniform QC mean cell numbers differ from the original publications.</li>
         <li>Dropout and zero inflation inflate CV and MAD for lowly expressed genes; read the mean-corrected and depth-downsampled values alongside the raw metrics.</li>
-        <li>Statistical power is limited by the number of patients with both compartments (6-27 per cancer type).</li>
+        <li>Statistical power is limited by the number of patients with both cell groups (6-27 per cancer type).</li>
         <li>TCNA's pathway (STRING enrichment) dashboard is not replicated and there is no custom data upload. Only 10x UMI data are used.</li>
+        <li><strong>Limitations and next version:</strong> one study per cancer type; more studies per type are planned for v3 so patient-level statistics gain power.</li>
       </ul>
     </section>
 
@@ -140,8 +165,8 @@
       <h2>JSON API</h2>
       <p class="small">All endpoints are GET and return JSON (NaN is serialised as null); errors carry <code>{"detail": "..."}</code>.</p>
       <ul class="small">
-        <li><code>/api/health</code>, <code>/api/cancer-types</code>, <code>/api/datasets</code></li>
-        <li><code>/api/genes/search?q=&amp;limit=</code>, <code>/api/genes/{gene}</code>, <code>/api/genes/{gene}/patients?cancer_type=</code>, <code>/api/genes/{gene}/celltypes?cancer_type=</code></li>
+        <li><code>/api/health</code> (status, data build and package version), <code>/api/cancer-types</code>, <code>/api/datasets</code></li>
+        <li><code>/api/genes/search?q=&amp;limit=&amp;cancer_type=</code> (<code>cancer_type</code> optional: only genes measured in that cancer type), <code>/api/genes/lookup?genes=&amp;cancer_type=</code> (sorts a list of up to 500 symbols into <code>found</code>, <code>unknown</code> and <code>not_in_cancer_type</code>), <code>/api/genes/{gene}</code>, <code>/api/genes/{gene}/patients?cancer_type=</code>, <code>/api/genes/{gene}/celltypes?cancer_type=</code></li>
         <li><code>/api/cancer-types/{ct}/top-genes?metric=&amp;direction=&amp;n=&amp;expressed_only=</code>, <code>/api/cancer-types/{ct}/comparison?metric=</code></li>
         <li><code>/api/cancer-types/{ct}/tumor-heterogeneity?score=&amp;level=</code>, <code>/api/tumor-heterogeneity/summary</code></li>
         <li><code>/api/noise-contrasts?cancer_type=</code>, <code>/api/cancer-types/{ct}/noise-contrasts</code></li>
@@ -153,7 +178,7 @@
     <section class="card about-section">
       <h2>Citations</h2>
       <ol class="ref-list">
-        <li>Shah R, Faisal A, bin Faiz A, Bashir I, Jawaid A, Bashir K, Shoaib M, Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">https://tcna.lums.edu.pk/</a></li>
+        <li>Shah R, Faisal A, bin Faiz A, Bashir I, Jawaid A, Bashir K, Shoaib M, Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --> Webserver: <a href="https://tcna.lums.edu.pk/">https://tcna.lums.edu.pk/</a></li>
         <li>Gavish A, Tyler M, Greenwald AC, et al. Hallmarks of transcriptional intratumour heterogeneity across a thousand tumours. <em>Nature</em> 618, 598-606 (2023). 3CA: <a href="https://www.weizmann.ac.il/sites/3CA/">https://www.weizmann.ac.il/sites/3CA/</a></li>
         <li>Han Y, Wang Y, Dong X, et al. TISCH2: expanded datasets and new tools for single-cell transcriptome analyses of the tumor microenvironment. <em>Nucleic Acids Res</em> 51, D1425-D1431 (2023). <a href="https://tisch.compbio.cn/">https://tisch.compbio.cn/</a></li>
         <li>Li M, Zhang Z, Li L, Wang X. An algorithm to quantify intratumor heterogeneity based on alterations of gene expression profiles. <em>Commun Biol</em> 3, 505 (2020). The DEPTH algorithm from the WangX-Lab/DEPTH package: <a href="https://github.com/WangX-Lab/DEPTH">https://github.com/WangX-Lab/DEPTH</a></li>
@@ -167,9 +192,14 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
-      <p>Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
+    <div class="container footer-inner">
+      <p>&copy; 2026 BIRL &mdash; This website is free and open to all users and there is no login requirement.</p>
+      <a class="footer-lab" href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">Biomedical Informatics &amp; Engineering Research Laboratory,</a>
+      <p>Lahore University of Management Sciences, DHA, Lahore, Pakistan</p>
+      <p>+92 (42) 3560 8352</p>
+      <p class="footer-cite">Please cite: Shah R, Faisal A, et al., Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --></p>
+      <p class="footer-links"><a href="https://tcna.lums.edu.pk/" target="_blank" rel="noopener">TCNA (bulk RNA-seq)</a> &middot; <a href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">BIRL</a> &middot; <a href="about.html">About scTCNA</a></p>
+      <p class="footer-meta">Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
     </div>
   </footer>
 

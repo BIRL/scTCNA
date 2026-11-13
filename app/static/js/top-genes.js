@@ -57,23 +57,23 @@
 
     const shown = rows.slice(0, MAX_BARS);
     let colors;
-    let chips = '';
+    let legend;
     if (info.hasQ) {
       colors = shown.map((r) => (App.isNum(r.value_q) && r.value_q < 0.05 ? Plots.COLORS.significant : Plots.COLORS.neutral));
-      chips = '<span class="chip chip-sig">q &lt; 0.05</span><span class="chip chip-ns">not significant</span>';
+      legend = [{ name: 'q < 0.05', color: Plots.COLORS.significant }, { name: 'not significant', color: Plots.COLORS.neutral }];
     } else {
       colors = Plots.COLORS[info.compartment] || Plots.COLORS.accent;
-      chips = info.compartment === 'malignant' ? '<span class="chip chip-mal">Malignant</span>' : '<span class="chip chip-non">Non-malignant</span>';
+      legend = [{ name: App.COMPARTMENT_LABEL[info.compartment] || info.label, color: colors }];
     }
-    $('chips').innerHTML = chips;
     Plots.bars('plot-top', shown.map((r) => r.gene), shown.map((r) => r.value), {
       horizontal: true,
       colors: colors,
+      legend: legend,
       hover: shown.map(
         (r) =>
           r.gene + '<br>' + info.label + ': ' + fmt(r.value) +
-          '<br>mean Mal / Non-mal: ' + fmt(r.mean_malignant) + ' / ' + fmt(r.mean_non_malignant) +
-          '<br>CV Mal / Non-mal: ' + fmt(r.cv_malignant) + ' / ' + fmt(r.cv_non_malignant) +
+          '<br>mean malignant / non-malignant: ' + fmt(r.mean_malignant) + ' / ' + fmt(r.mean_non_malignant) +
+          '<br>CV malignant / non-malignant: ' + fmt(r.cv_malignant) + ' / ' + fmt(r.cv_non_malignant) +
           (info.hasQ ? '<br>q (this metric) = ' + fmtP(r.value_q) + ', paired patients = ' + fmt(r.n_pairs) : '')
       ),
       xtitle: info.label,

@@ -9,6 +9,7 @@ import math
 import pytest
 from fastapi.testclient import TestClient
 
+import sctcna
 from app.main import create_app
 
 RANK_METRICS = [
@@ -93,6 +94,7 @@ def a_gene(client):
 def test_health(client):
     data = body(client.get("/api/health"))
     assert data["status"] == "ok"
+    assert data["version"] == sctcna.__version__
     assert data["n_datasets"] == 2
     assert data["n_genes"] > 0
     assert set(data["build"]["datasets"]) == {"SYN_Test", "SYN_Two"}
@@ -156,6 +158,52 @@ def test_gene_search_bad_input(client):
     assert client.get("/api/genes/search", params={"q": "P", "limit": 0}).status_code == 422
     assert client.get("/api/genes/search", params={"q": "P", "limit": 101}).status_code == 422
     assert body(client.get("/api/genes/search", params={"q": "ZZZNOPE"}))["results"] == []
+
+
+@pytest.fixture(scope="module")
+def partial_client(app_data_dir, tmp_path_factory):
+    """App tables in which the POIS1* genes are measured in SYN only (their SY2 rows dropped from gene_summary)."""
+    import shutil
+
+    import pandas as pd
+
+    out = tmp_path_factory.mktemp("partial") / "app"
+    shutil.copytree(app_data_dir, out)
+    gs = pd.read_parquet(out / "gene_summary.parquet")
+    drop = (gs["cancer_type"] == "SY2") & gs["gene"].str.startswith("POIS1")
+    assert drop.sum() > 10
+    gs[~drop].to_parquet(out / "gene_summary.parquet")
+    return TestClient(create_app(out))
+
+
+def test_gene_search_cancer_type_filter(client, partial_client):
+    params = {"q": "pois", "limit": 5}
+    plain = body(client.get("/api/genes/search", params=params))
+    assert body(client.get("/api/genes/search", params={**params, "cancer_type": "SY2"})) == plain  # every gene is in both
+    syn = body(partial_client.get("/api/genes/search", params={"q": "pois1", "limit": 100, "cancer_type": "SYN"}))["results"]
+    assert syn and all(r["gene"].startswith("POIS1") and r["n_cancer_types"] == 1 for r in syn)
+    assert set(syn[0]) == {"gene", "n_cancer_types"}
+    assert body(partial_client.get("/api/genes/search", params={"q": "pois1", "cancer_type": "SY2"}))["results"] == []
+    sy2 = body(partial_client.get("/api/genes/search", params={"q": "pois", "limit": 100, "cancer_type": "SY2"}))["results"]
+    assert sy2 and not any(r["gene"].startswith("POIS1") for r in sy2)
+    assert client.get("/api/genes/search", params={"q": "pois", "cancer_type": "NOPE"}).status_code == 404
+    assert client.get("/api/genes/search", params={"q": " ", "cancer_type": "SYN"}).status_code == 400
+
+
+def test_gene_lookup(client, partial_client):
+    data = body(client.get("/api/genes/lookup", params={"genes": "od30, pois100 NOTAGENE\nOD30"}))
+    assert data == {"cancer_type": None, "found": ["OD30", "POIS100"], "unknown": ["NOTAGENE"], "not_in_cancer_type": []}
+    data = body(partial_client.get("/api/genes/lookup", params={"genes": "POIS100 OD30 nope", "cancer_type": "SY2"}))
+    assert data == {"cancer_type": "SY2", "found": ["OD30"], "unknown": ["nope"], "not_in_cancer_type": ["POIS100"]}
+    data = body(partial_client.get("/api/genes/lookup", params={"genes": "POIS100 OD30", "cancer_type": "SYN"}))
+    assert data["found"] == ["POIS100", "OD30"] and data["not_in_cancer_type"] == []
+
+
+def test_gene_lookup_errors(client):
+    assert client.get("/api/genes/lookup").status_code == 400
+    assert client.get("/api/genes/lookup", params={"genes": " , "}).status_code == 400
+    assert client.get("/api/genes/lookup", params={"genes": " ".join(f"G{i}" for i in range(501))}).status_code == 400
+    assert client.get("/api/genes/lookup", params={"genes": "OD30", "cancer_type": "NOPE"}).status_code == 404
 
 
 def test_gene_detail(client, a_gene):
@@ -421,6 +469,7 @@ def test_missing_data_dir_gives_503(tmp_path):
     client = TestClient(create_app(tmp_path / "does-not-exist"))
     health = body(client.get("/api/health"), status=503)  # a host health check must fail without tables
     assert health["status"] == "no-data" and health["n_datasets"] == 0 and health["build"] is None
+    assert health["version"] == sctcna.__version__
     assert "does-not-exist" in health["detail"] and str(tmp_path) not in health["detail"]  # no absolute paths leak
     for path in ("/api/cancer-types", "/api/datasets", "/api/genes/OD30", "/api/heatmap?genes=OD30&metric=cv_malignant", "/api/download/datasets.csv"):
         r = client.get(path)

@@ -27,7 +27,17 @@
   <main class="container">
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
-    <h1 class="page-title">Heatmap</h1>
+    <div class="page-head"><h1 class="page-title">Heatmap</h1></div>
+    <template id="page-info">
+      <h2>Heatmap</h2>
+      <ul>
+        <li>One noise metric for a list of genes across all ten cancer types.</li>
+        <li>Inputs: up to 200 gene symbols (typed, or uploaded as a .txt file with one symbol per line), the metric, and optionally row z-scores and the expressed-genes filter.</li>
+        <li>A blank cell means the gene is not measured in that cancer type (or, with the filter, detected in fewer than 10% of cells).</li>
+        <li>Values are not batch-corrected across studies; row z-scores compare a gene across cancer types.</li>
+        <li>The table lists cancer types in rows and genes in columns; the CSV keeps one row per gene.</li>
+      </ul>
+    </template>
     <p class="page-lead">One noise metric for a list of genes across all cancer types. Cells are blank where a gene is absent from a dataset. Values are not batch-corrected across studies; the row z-score option rescales each gene over the cancer types it is measured in.</p>
 
     <section class="card">
@@ -36,6 +46,12 @@
           <label for="genes">Gene list (up to 200 symbols, separated by commas, spaces or new lines)</label>
           <textarea id="genes" spellcheck="false" placeholder="e.g. TP53 MYC EGFR"></textarea>
         </div>
+        <div class="upload-row">
+          <label class="btn secondary small file-btn" for="genes-file">Upload .txt</label>
+          <input type="file" id="genes-file" class="visually-hidden" accept=".txt,text/plain">
+          <span class="small muted">One symbol per line, or separated by spaces or commas; added to the list above.</span>
+        </div>
+        <div id="genes-note" class="notice wide" role="status" hidden></div>
         <div class="field grow"><label for="metric">Metric</label><select id="metric"></select></div>
         <label class="check"><input type="checkbox" id="zscore"> z-score rows</label>
         <label class="check"><input type="checkbox" id="expressed"> expressed genes only</label>
@@ -55,16 +71,21 @@
         <div id="plot-heatmap" class="plot"></div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>Values</h2><p class="card-sub">Rows are genes, columns cancer types; the CSV also holds the q-values when the metric has a paired test.</p></div>
+        <div class="card-head"><h2>Values</h2><p class="card-sub">Cancer types in rows, genes in columns; click a row label to sort the genes. The CSV keeps one row per gene and also holds the q-values when the metric has a paired test.</p></div>
         <div id="table"></div>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
-      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods and references on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    <div class="container footer-inner">
+      <p>&copy; 2026 BIRL &mdash; This website is free and open to all users and there is no login requirement.</p>
+      <a class="footer-lab" href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">Biomedical Informatics &amp; Engineering Research Laboratory,</a>
+      <p>Lahore University of Management Sciences, DHA, Lahore, Pakistan</p>
+      <p>+92 (42) 3560 8352</p>
+      <p class="footer-cite">Please cite: Shah R, Faisal A, et al., Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --></p>
+      <p class="footer-links"><a href="https://tcna.lums.edu.pk/" target="_blank" rel="noopener">TCNA (bulk RNA-seq)</a> &middot; <a href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">BIRL</a> &middot; <a href="about.html">About scTCNA</a></p>
+      <p class="footer-meta">Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
     </div>
   </footer>
 

@@ -27,8 +27,18 @@
   <main class="container">
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
-    <h1 class="page-title">Gene Noise Analysis</h1>
-    <p class="page-lead">Transcriptional noise of a gene in <strong>Malignant</strong> versus <strong>Non-malignant</strong> cells of the same patients. Values are medians across patients of per-patient metrics on CP10K-normalised counts; differential noise is log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>) per patient (TCNA Eq. 1), tested with a paired Wilcoxon signed-rank test.</p>
+    <div class="page-head"><h1 class="page-title">Gene Noise Analysis</h1></div>
+    <template id="page-info">
+      <h2>Gene Noise Analysis</h2>
+      <ul>
+        <li>Shows how variable (noisy) a gene is in <strong>malignant cells</strong> compared with the <strong>non-malignant cells</strong> of the same patients.</li>
+        <li><strong>Pan-cancer:</strong> type one gene symbol and tick the cancer types to show (all ten by default; Select all / Clear).</li>
+        <li><strong>Cancer-specific:</strong> pick one cancer type and list up to 50 genes: type them, pick them from the suggestions (only genes measured in that cancer type are offered) or upload a .txt file.</li>
+        <li>Bars are medians across patients. Differential noise is log2(CV malignant / CV non-malignant) per patient, tested across patients with a paired Wilcoxon test (blue bars: q &lt; 0.05).</li>
+        <li>Tables list the metrics in rows; click a row label to sort the columns. Tables download as CSV, plots as PNG (camera icon); "View in TCNA" opens the same gene in bulk TCNA.</li>
+      </ul>
+    </template>
+    <p class="page-lead">Transcriptional noise of a gene in <strong>malignant cells</strong> versus <strong>non-malignant cells</strong> of the same patients. Values are medians across patients of per-patient metrics on CP10K-normalised counts; differential noise is log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>) per patient (<a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">TCNA Eq. 1</a><!-- DOI: fill when available -->), tested with a paired Wilcoxon signed-rank test.</p>
 
     <section class="card">
       <div class="card-head">
@@ -44,6 +54,15 @@
           <div class="autocomplete"><input id="gene-input" type="text" placeholder="start typing a gene symbol" required></div>
         </div>
         <button class="btn" type="submit">Analyse</button>
+        <fieldset class="field wide cancer-picker">
+          <legend class="label">Cancer types</legend>
+          <div class="picker-actions">
+            <button type="button" class="btn secondary small" id="pan-all">Select all</button>
+            <button type="button" class="btn secondary small" id="pan-none">Clear</button>
+            <span class="small muted" id="pan-count"></span>
+          </div>
+          <div class="checks" id="pan-checks"></div>
+        </fieldset>
       </form>
       <form id="cancer-form" class="controls" hidden>
         <div class="field">
@@ -51,13 +70,19 @@
           <select id="cancer-select"></select>
         </div>
         <div class="field grow">
-          <label for="gene-add">Add a gene</label>
+          <label for="gene-add">Add a gene (suggestions are genes measured in this cancer type)</label>
           <div class="autocomplete"><input id="gene-add" type="text" placeholder="search and pick to add to the list"></div>
         </div>
         <div class="field wide">
           <label for="genes-text">Gene list (up to 50 symbols, separated by commas, spaces or new lines)</label>
           <textarea id="genes-text" spellcheck="false"></textarea>
         </div>
+        <div class="upload-row">
+          <label class="btn secondary small file-btn" for="genes-file">Upload .txt</label>
+          <input type="file" id="genes-file" class="visually-hidden" accept=".txt,text/plain">
+          <span class="small muted">One symbol per line, or separated by spaces or commas; added to the list above.</span>
+        </div>
+        <div id="genes-note" class="notice wide" role="status" hidden></div>
         <button class="btn" type="submit">Analyse</button>
       </form>
     </section>
@@ -66,9 +91,10 @@
       <div class="card">
         <div class="card-head">
           <h2 id="pan-title"></h2>
+          <div class="card-actions"><a id="pan-tcna" class="btn secondary small" href="#" target="_blank" rel="noopener" hidden>View this gene in bulk TCNA &#8599;</a></div>
           <p class="card-sub">Each bar is the median across patients; error bars on the mean are the SD across cells.</p>
         </div>
-        <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
+        <div id="pan-note" class="notice" role="status" hidden></div>
         <div class="grid-2">
           <div class="plot-box"><h3>Mean &plusmn; SD (CP10K)</h3><div id="plot-mean" class="plot"></div></div>
           <div class="plot-box"><h3>CV = SD / mean</h3><div id="plot-cv" class="plot"></div></div>
@@ -77,7 +103,7 @@
           <div class="plot-box"><h3>Mean-corrected CV&sup2; (LOWESS residual)</h3><div id="plot-cv2resid" class="plot"></div></div>
           <div class="plot-box">
             <h3>Differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</h3>
-            <p class="plot-note">Median over patients; <span class="chip chip-sig">q &lt; 0.05</span> <span class="chip chip-ns">not significant</span>; n = paired patients. Click a bar to open the per-patient detail.</p>
+            <p class="plot-note">Median over patients; n = paired patients. Click a bar to open the per-patient detail.</p>
             <div id="plot-diff" class="plot"></div>
           </div>
         </div>
@@ -87,6 +113,7 @@
         <div class="card-head">
           <h2>Summary table</h2>
           <div class="card-actions"><button id="pan-download" class="btn secondary small" type="button">Download CSV</button></div>
+          <p class="card-sub">Metrics in rows, cancer types in columns; click a row label to sort the columns. The CSV keeps one row per cancer type.</p>
         </div>
         <div id="pan-table"></div>
       </div>
@@ -113,7 +140,7 @@
         <div class="grid-2">
           <div class="plot-box">
             <h3 id="paired-title">Paired per-patient values</h3>
-            <p class="plot-note">One line per patient joining its Malignant and Non-malignant value; wide dashes are the medians.</p>
+            <p class="plot-note">One line per patient joining its value in malignant cells and in non-malignant cells; wide dashes are the medians.</p>
             <div id="plot-paired" class="plot"></div>
             <p id="paired-stats" class="stat-line"></p>
           </div>
@@ -134,28 +161,30 @@
       <div class="card">
         <div class="card-head">
           <h2 id="cs-title"></h2>
-          <p class="card-sub">Medians across patients; error bars on the mean are the SD across cells.</p>
+          <div class="card-actions"><a id="cs-tcna" class="btn secondary small" href="#" target="_blank" rel="noopener" hidden>View these genes in bulk TCNA &#8599;</a></div>
+          <p class="card-sub">Medians across patients; error bars on the mean are the SD across cells. With more than 8 genes every metric has its own card; click a title to open it.</p>
         </div>
-        <div id="cs-missing" class="notice" hidden></div>
-        <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
-        <div class="grid-2">
-          <div class="plot-box"><h3>Mean &plusmn; SD (CP10K)</h3><div id="plot-cs-mean" class="plot"></div></div>
-          <div class="plot-box"><h3>CV = SD / mean</h3><div id="plot-cs-cv" class="plot"></div></div>
-          <div class="plot-box"><h3>MAD (mean absolute deviation)</h3><div id="plot-cs-mad" class="plot"></div></div>
-          <div class="plot-box"><h3>Fano = variance / mean</h3><div id="plot-cs-fano" class="plot"></div></div>
-          <div class="plot-box"><h3>Mean-corrected CV&sup2; (LOWESS residual)</h3><div id="plot-cs-cv2resid" class="plot"></div></div>
-          <div class="plot-box">
-            <h3>Differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</h3>
-            <p class="plot-note"><span class="chip chip-sig">q &lt; 0.05</span> <span class="chip chip-ns">not significant</span></p>
+        <div id="cs-missing" class="notice" role="status" hidden></div>
+        <div id="cs-grid" class="grid-2 metric-grid">
+          <details class="plot-box metric-card" open><summary><h3>Mean &plusmn; SD (CP10K)</h3></summary><div id="plot-cs-mean" class="plot"></div></details>
+          <details class="plot-box metric-card" open><summary><h3>CV = SD / mean</h3></summary><div id="plot-cs-cv" class="plot"></div></details>
+          <details class="plot-box metric-card" open><summary><h3>MAD (mean absolute deviation)</h3></summary><div id="plot-cs-mad" class="plot"></div></details>
+          <details class="plot-box metric-card" open><summary><h3>Fano = variance / mean</h3></summary><div id="plot-cs-fano" class="plot"></div></details>
+          <details class="plot-box metric-card" open><summary><h3>Mean-corrected CV&sup2; (LOWESS residual)</h3></summary><div id="plot-cs-cv2resid" class="plot"></div></details>
+          <details class="plot-box metric-card" open>
+            <summary><h3>Differential noise log2(CV<sub>mal</sub>/CV<sub>non-mal</sub>)</h3></summary>
+            <p class="plot-note">Median over patients; genes without a paired test are marked "not tested".</p>
             <div id="plot-cs-diff" class="plot"></div>
-          </div>
+          </details>
         </div>
       </div>
       <div class="card">
         <div class="card-head">
           <h2>Summary table</h2>
           <div class="card-actions"><button id="cs-download" class="btn secondary small" type="button">Download CSV</button></div>
+          <p class="card-sub">Metrics in rows, genes in columns; click a row label to sort the genes. The CSV keeps one row per gene.</p>
         </div>
+        <p id="cs-context" class="table-context"></p>
         <div id="cs-table"></div>
       </div>
     </section>
@@ -163,7 +192,7 @@
     <section class="card" id="sample-counts">
       <div class="card-head">
         <h2>Sample counts</h2>
-        <p class="card-sub">Cells and patients per compartment in each cancer type after quality control.</p>
+        <p class="card-sub">Cells and patients per cell group in each cancer type after quality control.</p>
       </div>
       <div class="grid-2">
         <div class="plot-box"><h3>Cells</h3><div id="plot-cells" class="plot"></div></div>
@@ -173,9 +202,14 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
-      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods and references on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    <div class="container footer-inner">
+      <p>&copy; 2026 BIRL &mdash; This website is free and open to all users and there is no login requirement.</p>
+      <a class="footer-lab" href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">Biomedical Informatics &amp; Engineering Research Laboratory,</a>
+      <p>Lahore University of Management Sciences, DHA, Lahore, Pakistan</p>
+      <p>+92 (42) 3560 8352</p>
+      <p class="footer-cite">Please cite: Shah R, Faisal A, et al., Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --></p>
+      <p class="footer-links"><a href="https://tcna.lums.edu.pk/" target="_blank" rel="noopener">TCNA (bulk RNA-seq)</a> &middot; <a href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">BIRL</a> &middot; <a href="about.html">About scTCNA</a></p>
+      <p class="footer-meta">Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
     </div>
   </footer>
 

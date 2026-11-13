@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Top genes · scTCNA</title>
-  <meta name="description" content="Noisiest and most stable genes per cancer type by differential noise or per-compartment noise metric (scTCNA).">
+  <meta name="description" content="Noisiest and most stable genes per cancer type by differential noise or by the noise of one cell group (scTCNA).">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -27,8 +27,18 @@
   <main class="container">
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
-    <h1 class="page-title">Top genes</h1>
-    <p class="page-lead">Genes ranked within one cancer type by a noise metric: differential noise between compartments (log2 ratios, median over patients, with paired Wilcoxon q-values) or the noise of one compartment on its own. "Noisy" lists the largest values first, "stable" the smallest.</p>
+    <div class="page-head"><h1 class="page-title">Top genes</h1></div>
+    <template id="page-info">
+      <h2>Top genes</h2>
+      <ul>
+        <li>Ranks the genes of one cancer type by one noise metric.</li>
+        <li>Inputs: cancer type; metric (differential noise between the cell groups, or the noise of one cell group); direction (Noisy lists the largest values first, Stable the smallest); number of genes (1-500).</li>
+        <li>"Expressed genes only" keeps genes detected in at least 10% of cells of both cell groups, the genes that are tested.</li>
+        <li>Blue bars: q &lt; 0.05 for metrics with a paired test.</li>
+        <li>Click a column header to sort the table; the CSV holds the same rows.</li>
+      </ul>
+    </template>
+    <p class="page-lead">Genes ranked within one cancer type by a noise metric: differential noise between malignant and non-malignant cells (log2 ratios, median over patients, with paired Wilcoxon q-values) or the noise of one cell group on its own. "Noisy" lists the largest values first, "stable" the smallest.</p>
 
     <section class="card">
       <form id="form" class="controls">
@@ -42,7 +52,7 @@
           </div>
         </div>
         <div class="field"><label for="n">Genes (1-500)</label><input id="n" type="number" min="1" max="500" value="50"></div>
-        <label class="check"><input type="checkbox" id="expressed" checked> expressed genes only (detected in &ge; 10% of cells in both compartments)</label>
+        <label class="check"><input type="checkbox" id="expressed" checked> expressed genes only (detected in &ge; 10% of cells in both cell groups)</label>
         <button class="btn" type="submit">Show</button>
         <a id="csv-link" class="btn secondary" href="#" download>Download CSV</a>
       </form>
@@ -54,7 +64,6 @@
           <h2 id="title"></h2>
           <p class="card-sub" id="subtitle"></p>
         </div>
-        <div class="legend-chips" id="chips"></div>
         <div id="plot-top" class="plot tall"></div>
         <p class="plot-note muted small" id="plot-note"></p>
       </div>
@@ -66,9 +75,14 @@
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
-      <p>Data: 3CA (Gavish et al., Nature 2023). Full methods and references on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    <div class="container footer-inner">
+      <p>&copy; 2026 BIRL &mdash; This website is free and open to all users and there is no login requirement.</p>
+      <a class="footer-lab" href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">Biomedical Informatics &amp; Engineering Research Laboratory,</a>
+      <p>Lahore University of Management Sciences, DHA, Lahore, Pakistan</p>
+      <p>+92 (42) 3560 8352</p>
+      <p class="footer-cite">Please cite: Shah R, Faisal A, et al., Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --></p>
+      <p class="footer-links"><a href="https://tcna.lums.edu.pk/" target="_blank" rel="noopener">TCNA (bulk RNA-seq)</a> &middot; <a href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">BIRL</a> &middot; <a href="about.html">About scTCNA</a></p>
+      <p class="footer-meta">Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
     </div>
   </footer>
 

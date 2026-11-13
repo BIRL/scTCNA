@@ -27,8 +27,18 @@
   <main class="container">
     <div id="error-banner" class="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="error-dismiss" aria-label="Dismiss">&times;</button></div>
 
-    <h1 class="page-title">Tumor Heterogeneity</h1>
-    <p class="page-lead">DEPTH2 and DEPTH scores on log2-transformed expression, as in TCNA. At the <strong>cell</strong> level every cell is a sample: DEPTH2 z-scores genes across the cells of the same patient and compartment (how atypical a cell is within its own tumour), and DEPTH scores malignant cells against the mean of the non-malignant cells (its "normal" reference, so non-malignant cells have no DEPTH). At the <strong>sample</strong> level each patient x compartment pseudo-bulk profile is a sample. DEPTH2 is compared between compartments with a paired Wilcoxon test across patients.</p>
+    <div class="page-head"><h1 class="page-title">Tumor Heterogeneity</h1></div>
+    <template id="page-info">
+      <h2>Tumor Heterogeneity</h2>
+      <ul>
+        <li>DEPTH2 and DEPTH tumour-heterogeneity scores, as in TCNA, for one cancer type.</li>
+        <li>Inputs: cancer type, score (DEPTH2 or DEPTH) and level: <strong>Cell</strong> scores every cell; <strong>Sample</strong> scores one pseudo-bulk profile per patient and cell group.</li>
+        <li>Cell level: violins of all cells per cell group, with dots for the per-patient medians. Sample level: one line per patient joining its two cell groups.</li>
+        <li>The paired Wilcoxon test across patients compares the cell groups. DEPTH scores malignant cells against the non-malignant cells, so only the cell level has a paired DEPTH test.</li>
+        <li>The bottom panel compares DEPTH2 per cell across all cancer types.</li>
+      </ul>
+    </template>
+    <p class="page-lead">DEPTH2 and DEPTH scores on log2-transformed expression, as in TCNA. At the <strong>cell</strong> level every cell is a sample: DEPTH2 z-scores genes across the cells of the same patient and cell group (how atypical a cell is within its own tumour), and DEPTH scores malignant cells against the mean of the non-malignant cells (its "normal" reference, so non-malignant cells have no DEPTH). At the <strong>sample</strong> level each patient x cell group pseudo-bulk profile is a sample. DEPTH2 is compared between malignant and non-malignant cells with a paired Wilcoxon test across patients.</p>
 
     <section class="card">
       <form id="form" class="controls">
@@ -60,7 +70,6 @@
           <p class="card-sub" id="subtitle"></p>
         </div>
         <div id="note" class="notice" hidden></div>
-        <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
         <div id="plot-main" class="plot tall"></div>
         <p id="stats" class="stat-line"></p>
       </div>
@@ -73,18 +82,22 @@
     <section class="card">
       <div class="card-head">
         <h2>Across cancer types</h2>
-        <p class="card-sub">Per-patient medians of the per-cell DEPTH2 (median across patients per compartment) and the paired tests of every dataset.</p>
+        <p class="card-sub">Per-patient medians of the per-cell DEPTH2 (median across patients per cell group) and the paired tests of every dataset.</p>
       </div>
-      <div class="legend-chips"><span class="chip chip-mal">Malignant</span><span class="chip chip-non">Non-malignant</span></div>
       <div id="plot-summary" class="plot"></div>
       <div id="summary-table"></div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container">
-      <p>scTCNA is a single-cell RNA-seq counterpart of The Cancer Noise Atlas. If you use it, please cite: Shah R, Faisal A, et al., Chaudhary SU. The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026. <a href="https://tcna.lums.edu.pk/">tcna.lums.edu.pk</a></p>
-      <p>DEPTH: Li M et al., Commun Biol 2020. DEPTH2: Song D, Wang X, J Transl Med 2022. Full methods on the <a href="about.html">About</a> page. <span id="footer-version"></span></p>
+    <div class="container footer-inner">
+      <p>&copy; 2026 BIRL &mdash; This website is free and open to all users and there is no login requirement.</p>
+      <a class="footer-lab" href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">Biomedical Informatics &amp; Engineering Research Laboratory,</a>
+      <p>Lahore University of Management Sciences, DHA, Lahore, Pakistan</p>
+      <p>+92 (42) 3560 8352</p>
+      <p class="footer-cite">Please cite: Shah R, Faisal A, et al., Chaudhary SU. <a href="https://www.sciencedirect.com/science/article/pii/S0022283626002159" target="_blank" rel="noopener">The Cancer Noise Atlas (TCNA): A Webserver of Multiscale Transcriptional Noise in Cancer. <em>J Mol Biol</em> 2026.</a><!-- DOI: fill when available --></p>
+      <p class="footer-links"><a href="https://tcna.lums.edu.pk/" target="_blank" rel="noopener">TCNA (bulk RNA-seq)</a> &middot; <a href="https://birl.lums.edu.pk/" target="_blank" rel="noopener">BIRL</a> &middot; <a href="about.html">About scTCNA</a></p>
+      <p class="footer-meta">DEPTH: Li M et al., Commun Biol 2020. DEPTH2: Song D, Wang X, J Transl Med 2022. Data: 3CA (Gavish et al., Nature 2023). <span id="footer-version"></span></p>
     </div>
   </footer>
 
