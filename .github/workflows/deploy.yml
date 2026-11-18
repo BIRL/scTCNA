@@ -1,0 +1,57 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'BIRL/scTCNA'
+    runs-on: [self-hosted, sctcna-prod]
+    timeout-minutes: 30
+    env:
+      TAG: sctcna:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build image
+        run: docker build -t "$TAG" .
+
+      - name: Test new image on a spare port
+        run: |
+          docker rm -f sctcna-candidate 2>/dev/null || true
+          docker run -d --name sctcna-candidate -p 127.0.0.1:18000:7860 "$TAG"
+          for i in $(seq 30); do curl -fsS http://127.0.0.1:18000/api/health && break; sleep 2; done
+          curl -fsS http://127.0.0.1:18000/api/health
+          curl -fsS http://127.0.0.1:18000/api/health | grep -q '"sctcna_version"'
+
+      - name: Swap live container
+        id: swap
+        run: |
+          docker rm -f sctcna 2>/dev/null || true
+          docker run -d --name sctcna --restart unless-stopped -p 7860:7860 "$TAG"
+          for i in $(seq 30); do curl -fsS http://127.0.0.1:7860/api/health && break; sleep 2; done
+          curl -fsS http://127.0.0.1:7860/api/health
+          docker tag "$TAG" sctcna:latest
+
+      - name: Roll back to previous image
+        if: failure() && steps.swap.outcome == 'failure'
+        run: |
+          docker rm -f sctcna 2>/dev/null || true
+          docker run -d --name sctcna --restart unless-stopped -p 7860:7860 sctcna:latest
+
+      - name: Clean up
+        if: always()
+        run: |
+          docker rm -f sctcna-candidate 2>/dev/null || true
+          docker images sctcna --format '{{.Tag}}' | grep -vx latest | grep -vx "${{ github.sha }}" \
+            | xargs -r -I{} docker rmi "sctcna:{}" 2>/dev/null || true
+          docker image prune -f
